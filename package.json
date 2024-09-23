@@ -1,0 +1,16 @@
+{
+  "name": "lei-web-perf",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node main.js"
+  },
+  "type": "module",
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "lighthouse": "^12.2.0",
+    "sqlite3": "^5.1.7"
+  }
+}
