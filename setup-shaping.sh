@@ -222,6 +222,10 @@ function setup_ip {
   
   # need to set loopback up, Ookla's Speedtest CLI uses it for example
   ip -netns "${CLIENT_NS}" link set dev lo up
+
+  #probably set MTU of host link but should probably also save the original value
+  #ip link set dev "${INET_IFACE}" mtu 1500
+  #all other links should be 1500 by default
   
   ## shut off ipv6 completely
   ip netns exec "${BOTTLENECK_NS}" sysctl -w net.ipv6.conf.lo.disable_ipv6=1 &>/dev/null
@@ -355,9 +359,7 @@ function destroy {
   iptables-restore < "/tmp/iptables_rules.v4"
   if [[ "${NEED_MIRRORING}" = true ]]; then
     echo "unloading kernel modules ifb and act_mirred"
-    modprobe -r ifb
-    sleep 5
-    modprobe -r act_mirred
+    modprobe -r ifb && modprobe -r act_mirred &&  echo "unloaded"
   fi
   echo "done"
 }
