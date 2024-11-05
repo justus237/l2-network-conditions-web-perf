@@ -198,7 +198,7 @@ function setup_shaping {
       else
         upstream_buffer_limit=$(python3 "${bundledir}/calculate-buffer.py" "${UPSTREAM_THROUGHPUT}" "${DELAY_TO_INET}" "${DELAY_FROM_INET}")
       fi
-      netns exec "${BOTTLENECK_NS}" tc qdisc add dev ifb0 root tbf rate "${UPSTREAM_THROUGHPUT}" burst "${upstream_burst}" limit "${upstream_buffer_limit}"
+      ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev ifb0 root tbf rate "${UPSTREAM_THROUGHPUT}" burst "${upstream_burst}" limit "${upstream_buffer_limit}"
     fi
   fi
 }
