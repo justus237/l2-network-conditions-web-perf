@@ -272,7 +272,7 @@ function setup_dns {
 }
 
 function setup_iptables {
-  iptables-save > "${bundledir}/iptables_rules.v4"
+  iptables-save > "/tmp/iptables_rules.v4"
   #https://www.gilesthomas.com/2021/03/fun-with-network-namespaces
   #set up NAT for internet access
   iptables -P FORWARD DROP
@@ -292,7 +292,7 @@ function create {
     exit 22
   fi
   #check if we already set up an experiment and forgot to run destroy
-  source "${bundledir}/VARS"
+  source "/tmp/VARS"
   if [[ "$SETUP_ID" ]]; then
     # TODO enable changing the config when already running?
     echo "already set up an experiment, exiting"
@@ -331,7 +331,7 @@ function create {
   echo "sanity ping"
   ip netns exec ${CLIENT_NS} ping -c 3 192.168.0.2
   # write to vars 
-  cat << EOF >> "${bundledir}/VARS"
+  cat << EOF >> "/tmp/VARS"
 CLIENT_NS="${CLIENT_NS}"
 BOTTLENECK_NS="${BOTTLENECK_NS}"
 SETUP_ID="${DOWNSTREAM_THROUGHPUT} ${UPSTREAM_THROUGHPUT} ${DELAY_FROM_INET} ${DELAY_TO_INET} ${INET_IFACE}"
@@ -340,7 +340,7 @@ EOF
 }
 
 function destroy {
-  source "${bundledir}/VARS"
+  source "/tmp/VARS"
   echo "deleting namespaces"
   # remove all namespaces
   ip netns pids "${CLIENT_NS}" | xargs -r kill
@@ -350,9 +350,9 @@ function destroy {
   ip link del veth2
   # remove any queuing disciplines outside the namespaces
   # tc qdisc delete dev veth2 root
-  cat /dev/null > "${bundledir}/VARS"
+  cat /dev/null > "/tmp/VARS"
   echo "restoring iptables"
-  iptables-restore < "${bundledir}/iptables_rules.v4"
+  iptables-restore < "/tmp/iptables_rules.v4"
   if [[ "${NEED_MIRRORING}" = true ]]; then
     echo "unloading kernel modules ifb and act_mirred"
     modprobe -r ifb
@@ -363,7 +363,7 @@ function destroy {
 }
 
 echo "Client will always be in separate network namespace regardless of experiment"
-echo "This network namespace is called ${CLIENT_NS}; use \"source ${bundledir}/VARS\" to use in other scripts"
+echo "This network namespace is called ${CLIENT_NS}; use \"source /tmp/VARS\" to use in other scripts"
 
 echo "This setup uses one network namespace and bridge between the client and the Internet"
 
