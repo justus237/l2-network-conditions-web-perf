@@ -359,7 +359,7 @@ function destroy {
   iptables-restore < "/tmp/iptables_rules.v4"
   if [[ "${NEED_MIRRORING}" = true ]]; then
     echo "unloading kernel modules ifb and act_mirred"
-    modprobe -r ifb && modprobe -r act_mirred &&  echo "unloaded"
+    modprobe -r ifb act_mirred && echo "unloaded"
   fi
   echo "done"
 }
