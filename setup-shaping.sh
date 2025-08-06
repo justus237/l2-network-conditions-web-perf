@@ -7,12 +7,12 @@
 
 # Topology:
 # 
-#     |    client-net     |            bottleneck-net            |      NAT       |
-#     |                   |             netem + htb              |                |
-#     |   -----------     |     -----------------------------    |                |
-#     |   |  veth0  | --------- | veth0, ifb0 -- ifb1, veth1 | --------- veth1 --------- Inet
-#     |   -----------     |     -----------------------------    |                |
-#
+#     |    client-net     |            bottleneck-net            |      NAT/server-net-{1..n}       |
+#     |                   |             netem + tbf              |                                  |
+#     |   -----------     |     -----------------------------    |                                  |
+#     |   |  veth0  | --------- | veth0, ifb0 -- ifb1, veth1 | --------- veth{1..n} ------------------- Inet
+#     |   -----------     |     -----------------------------    |                                  |
+#         10.237.0.2                                                      10.237.0.3
 
 
 
@@ -30,12 +30,14 @@ fi
 ##because we check way further down below which function to run...
 COMMAND=$1
 if [[ "${COMMAND}" = "CREATE" ]]; then
-  if [ "$#" -ne 6 ] || [ "$#" -ne 5 ]; then
+  if [ "$#" -ne 6 ] && [ "$#" -ne 5 ]; then
+  echo "Invalid number of arguments for CREATE command $#."
   echo "CREATE usage: $0 CREATE <DL_CAPACITY> <UL_CAPACITY> <DL_DELAY_FROM_INET> <UL_DELAY_TO_INET> optional(<INET_IFACE>)"
   echo "Delays need explicit [ms] unit, capacities need explicit [kbit|Mbit] (per second) unit. No space between the number and unit."
   echo "Use NO_SHAPING to indicate that one of the shapings should not be applied."
   echo "If an interface name is provided, then we are in NAT mode and traffic will be routed to the Internet."
   echo "If no interface name is provided, a server network namespace will be created instead."
+  echo "You can optionally provide an integer >=1 as the 5th argument to create a number of server namespaces."
   echo ""
   exit 7
   fi
@@ -45,7 +47,7 @@ elif [[ "${COMMAND}" =~ ^(help|HELP|--help|-h|--h|-help|--HELP|-H|--H|-HELP)$ ]]
   echo "$0 DELETE"
   echo "For CREATE: Delays need explicit [ms] unit, capacities need explicit [kbit|Mbit] (per second) unit."
   echo "No space between the number and unit. We use NO_SHAPING to indicate that one of the shapings should not be applied."
-  echo "The interface name indicates whether the script should run in NAT mode with Internet connectivity or create a server network namespace."
+  echo "The interface name indicates whether the script should run in NAT mode with Internet connectivity or create >= 1 server network namespaces."
   echo ""
   exit 0
 fi
@@ -57,16 +59,37 @@ readonly DELAY_FROM_INET=$4
 readonly DELAY_TO_INET=$5
 readonly INET_IFACE=$6
 
-if [ -n "${INET_IFACE}" ]; then
+
+### length 0 means INET_IFACE is an ethernet interface and we don't create a server namespace (we exit if the variable INET_IFACE is not a number and also not an interface)
+### length 1 means INET_IFACE does not exist, is set to the empty string, or was set to "1" and we create a single server namespace
+### any length > 1 declares how many server namespaces exist
+SERVER_NS=()
+
+if [ -z "$INET_IFACE" ]; then
+  echo "INET_IFACE is not set, creating a single server namespace."
+  SERVER_NS+=("server-net")
+elif ip link show "${INET_IFACE}" &>/dev/null; then
+  echo "${INET_IFACE} exists, script is in NAT mode."
   #check ipv4 forwarding
   #it is required to be enabled on the root host if we want to access the Internet
   if [[ $(sysctl -n net.ipv4.ip_forward) -ne 1 ]]; then
     echo "IPv4 forwarding is disabled. Enabling it!"
     sysctl -w net.ipv4.ip_forward=1
   fi
+# check if it's a number
+elif [[ "$INET_IFACE" =~ ^[0-9]+$ && "$INET_IFACE" -ge 1 ]]; then
+  echo "Creating ${INET_IFACE} server namespaces."
+  # we create a number of server namespaces
+  NOF_SERVER_NAMESPACES=$INET_IFACE
+  # SERVER_NS will be an array of server namespaces
+  for (( i=1; i<=$NOF_SERVER_NAMESPACES; i++ )); do
+    SERVER_NS+=("server-net-$i")
+  done
 else
-  SERVER_NS="server-net"
+  echo "invalid argument: ${INET_IFACE}"
+  exit 0
 fi
+
 
 
 #setup some variables that we will use later on
@@ -93,31 +116,55 @@ function create_namespaces {
   echo "Creating namespaces."
   ip netns add "${BOTTLENECK_NS}"
   ip netns add "${CLIENT_NS}"
-  if [ -z "$INET_IFACE" ]; then
-    ip netns add "${SERVER_NS}"
-  fi
+  # add server namespaces if needed
+  for server_ns in "${SERVER_NS[@]}"; do
+    ip netns add "${server_ns}"
+  done
 }
 
 function setup_bottleneck_ns {
   echo "Setting up bottleneck namespace."
   echo "Setting up link between bottleneck and NAT (the host)."
-  if [ -n "${INET_IFACE}" ]; then
+  # if length of SERVER_NS is 0, then we are in NAT mode
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    echo "NAT mode, setting up veth pair between bottleneck and host."
     #if you directly place a veth peer in another netns then you can give them the same name, thanks benedikt
     ip link add veth1 netns "${BOTTLENECK_NS}" type veth peer name veth1
     ip link set dev veth1 up
     ip link set dev veth1 gso_max_segs 1
     ethtool -K veth1 tso off gso off gro off
     ethtool --offload veth1 rx off tx off
+    ip -netns "${BOTTLENECK_NS}" link set dev veth1 up
+    ip -netns "${BOTTLENECK_NS}" link set dev veth1 gso_max_segs 1
+    ip netns exec "${BOTTLENECK_NS}" ethtool -K veth1 tso off gso off gro off
+    ip netns exec "${BOTTLENECK_NS}" ethtool --offload veth1 rx off tx off
   else
-    ip link add veth1 netns "${BOTTLENECK_NS}" type veth peer name veth1 netns "${SERVER_NS}"
-    ip -netns "${SERVER_NS}" link set dev veth1 up
-    ip -netns "${SERVER_NS}" link set dev veth1 gso_max_segs 1
-    ip netns exec "${SERVER_NS}" ethtool -K veth1 tso off gso off gro off
-    ip netns exec "${SERVER_NS}" ethtool --offload veth1 rx off tx off
+    # if we have server namespaces, we create a veth pair for each of them
+    # it can be called veth1 in the server namespace, but not in the bottleneck namespace, where it needs to be numbered, starting from veth1
+    for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+      echo "Setting up veth pair for server namespace ${i} (${SERVER_NS[$i]})."
+      echo "veth$((i + 1)) in bottleneck namespace, veth1 in server namespace."
+      server_ns="${SERVER_NS[$i]}"
+      ip link add "veth$((i + 1))" netns "${BOTTLENECK_NS}" type veth peer name veth1 netns "${server_ns}"
+
+      ip -netns "${server_ns}" link set dev veth1 up
+      ip -netns "${server_ns}" link set dev veth1 gso_max_segs 1
+      ip netns exec "${server_ns}" ethtool -K veth1 tso off gso off gro off
+      ip netns exec "${server_ns}" ethtool --offload veth1 rx off tx off
+
+      ip -netns "${BOTTLENECK_NS}" link set dev "veth$((i + 1))" up
+      ip -netns "${BOTTLENECK_NS}" link set dev "veth$((i + 1))" gso_max_segs 1
+      ip netns exec "${BOTTLENECK_NS}" ethtool -K "veth$((i + 1))" tso off gso off gro off
+      ip netns exec "${BOTTLENECK_NS}" ethtool --offload "veth$((i + 1))" rx off tx off
+    done
+    # for server_ns in "${SERVER_NS[@]}"; do
+    #   ip link add veth1 netns "${BOTTLENECK_NS}" type veth peer name veth1 netns "${server_ns}"
+    #   ip -netns "${server_ns}" link set dev veth1 up
+    #   ip -netns "${server_ns}" link set dev veth1 gso_max_segs 1
+    #   ip netns exec "${server_ns}" ethtool -K veth1 tso off gso off gro off
+    #   ip netns exec "${server_ns}" ethtool --offload veth1 rx off tx off
+    # done
   fi
-  ip -netns "${BOTTLENECK_NS}" link set dev veth1 up
-  ip netns exec "${BOTTLENECK_NS}" ethtool -K veth1 tso off gso off gro off
-  ip netns exec "${BOTTLENECK_NS}" ethtool --offload veth1 rx off tx off
 }
 
 function setup_client_ns {
@@ -238,22 +285,40 @@ function setup_bottleneck_bridge {
   #you could see this as part of the ip address setup, but separate function for now
   ip -netns "${BOTTLENECK_NS}" link add name br-client-inet type bridge
   ip -netns "${BOTTLENECK_NS}" link set br-client-inet up
-  ip -netns "${BOTTLENECK_NS}" link set veth1 master br-client-inet
   ip -netns "${BOTTLENECK_NS}" link set veth0 master br-client-inet
+  #if we are in NAT mode, we add the veth1 to the bridge
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    ip -netns "${BOTTLENECK_NS}" link set veth1 master br-client-inet
+  fi
+  #if we have server namespaces, we add the veth pairs to the bridge
+  for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+    ip -netns "${BOTTLENECK_NS}" link set "veth$((i + 1))" master br-client-inet
+  done
 }
 
 function setup_ip {
   echo "setting up ip addresses"
   # add ip addresses
-  if [ -n "$INET_IFACE" ]; then
-    ip address add 192.168.0.2/24 dev veth1
+
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    ip address add 10.237.0.3/24 dev veth1
   else
-    ip -netns "${SERVER_NS}" address add 192.168.0.2/24 dev veth1
+    # if we have server namespaces, we assign the address to each of them
+    # we just number them based on the length of SERVER_NS and start from 3
+    for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+      ip -netns "${SERVER_NS[$i]}" address add "10.237.0.$((i + 3))/24" dev veth1
+    done
+    #ip -netns "${SERVER_NS}" address add 10.237.0.3/24 dev veth1
   fi
-  ip -netns "${CLIENT_NS}" address add 192.168.0.3/24 dev veth0
-  # set default route to internet
-  ip -netns "${CLIENT_NS}" route add default via 192.168.0.2
-  
+  ip -netns "${CLIENT_NS}" address add 10.237.0.2/24 dev veth0
+
+  # set default route to internet, this is only needed if we are in NAT mode
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    ip -netns "${CLIENT_NS}" route add default via 10.237.0.3
+  #else #this will be added by the ip command anyway
+  #  ip -netns "${CLIENT_NS}" route add 10.237.0.0/24 dev veth0
+  fi
+
   # need to set loopback up, Ookla's Speedtest CLI uses it for example
   ip -netns "${CLIENT_NS}" link set dev lo up
 
@@ -267,12 +332,16 @@ function setup_ip {
   ip netns exec "${BOTTLENECK_NS}" sysctl -w net.ipv6.conf.veth1.disable_ipv6=1 &>/dev/null
   ip netns exec "${CLIENT_NS}" sysctl -w net.ipv6.conf.lo.disable_ipv6=1 &>/dev/null
   ip netns exec "${CLIENT_NS}" sysctl -w net.ipv6.conf.veth0.disable_ipv6=1 &>/dev/null
-  if [ -n "$INET_IFACE" ]; then
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
     sysctl -w net.ipv6.conf.lo.disable_ipv6=1 &>/dev/null
     sysctl -w net.ipv6.conf.veth1.disable_ipv6=1 &>/dev/null
   else
-    ip netns exec "${SERVER_NS}" sysctl -w net.ipv6.conf.lo.disable_ipv6=1 &>/dev/null
-    ip netns exec "${SERVER_NS}" sysctl -w net.ipv6.conf.veth1.disable_ipv6=1 &>/dev/null
+    for server_ns in "${SERVER_NS[@]}"; do
+      ip netns exec "${server_ns}" sysctl -w net.ipv6.conf.lo.disable_ipv6=1 &>/dev/null
+      ip netns exec "${server_ns}" sysctl -w net.ipv6.conf.veth1.disable_ipv6=1 &>/dev/null
+    done
+    #ip netns exec "${SERVER_NS}" sysctl -w net.ipv6.conf.lo.disable_ipv6=1 &>/dev/null
+    #ip netns exec "${SERVER_NS}" sysctl -w net.ipv6.conf.veth1.disable_ipv6=1 &>/dev/null
   fi
   if [[ "${NEED_MIRRORING}" = true ]]; then
     ip netns exec "${BOTTLENECK_NS}" sysctl -w net.ipv6.conf.ifb0.disable_ipv6=1 &>/dev/null
@@ -282,12 +351,12 @@ function setup_ip {
 
 function setup_dns {
   # when running in NAT mode we assume that there's some kind of resolver running on the host that listens on any ip address, incl. the ones we add via veth
-  if [ -n "${INET_IFACE}" ]; then
-    echo "using 192.168.0.2 on host as DNS resolver"
-    resolv_conf_str = "nameserver 192.168.0.2"
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    echo "using 10.237.0.3 on host as DNS resolver"
+    resolv_conf_str="nameserver 10.237.0.3"
   else
     echo "using localhost in ${CLIENT_NS} as DNS resolver"
-    resolv_conf_str = "nameserver 127.0.0.1"
+    resolv_conf_str="nameserver 127.0.0.1"
   fi
   # TODO: this assumes that the host is running systemd resolved...
   # TODO: figure out how you can have getaddrinfo use this resolver...
@@ -317,8 +386,8 @@ function setup_dns {
     echo "${resolv_conf_str}" > resolv.conf
   fi
   #TODO: somehow figure out the DNS situation
-  #need to manually append DNSStubListenerExtra=192.168.0.2 to /etc/systemd/resolved.conf
-  #to systemd-resolved to also listen on 192.168.0.2
+  #need to manually append DNSStubListenerExtra=10.237.0.3 to /etc/systemd/resolved.conf
+  #to systemd-resolved to also listen on 10.237.0.3
   #however, this feature requires systemd version 247...
   #so for all older ubuntu versions we need to run our own stub resolver...
 }
@@ -330,7 +399,7 @@ function setup_iptables {
   iptables -P FORWARD DROP
   iptables -F FORWARD
   iptables -t nat -F
-  iptables -t nat -A POSTROUTING -s 192.168.0.3/24 -o "${INET_IFACE}" -j MASQUERADE
+  iptables -t nat -A POSTROUTING -s 10.237.0.2/24 -o "${INET_IFACE}" -j MASQUERADE
   iptables -A FORWARD -i "${INET_IFACE}" -o veth1 -j ACCEPT
   iptables -A FORWARD -o "${INET_IFACE}" -i veth1 -j ACCEPT
 }
@@ -338,11 +407,6 @@ function setup_iptables {
 #for all veth pairs and bridges: create -> set ip addresses/assign veth ends to bridge -> set up
 
 function create {
-  #check if interface exists using exit code (but suppress command output)
-  if [ -n "$INET_IFACE" ] && ! ip link show "${INET_IFACE}" &>/dev/null; then
-    echo "${INET_IFACE} does not exist."
-    exit 22
-  fi
   #check if we already set up an experiment and forgot to run destroy
   source "/tmp/VARS"
   if [[ "$SETUP_ID" ]]; then
@@ -378,19 +442,25 @@ function create {
   
   setup_dns
   
-  if [ -n "$INET_IFACE" ]; then
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
     setup_iptables
   fi
   
   echo "sanity ping"
-  ip netns exec ${CLIENT_NS} ping -c 3 192.168.0.2
-  if [ -n "$INET_IFACE" ]; then
-    ping -c 3 192.168.0.3
+  
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    ip netns exec "${CLIENT_NS}" ping -c 3 10.237.0.3
+    ping -c 3 10.237.0.2
   else
-    ip netns exec ${SERVER_NS} ping -c 3 192.168.0.3
+    # ping each server namespace and vice versa
+    for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+      echo "pinging from/to ${SERVER_NS[$i]}"
+      ip netns exec "${CLIENT_NS}" ping -c 3 "10.237.0.$((i + 3))"
+      ip netns exec "${SERVER_NS[$i]}" ping -c 3 10.237.0.2
+    done
   fi
-  # write to vars 
-  if [ -n "$INET_IFACE" ]; then
+  # write to vars
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
   cat << EOF >> "/tmp/VARS"
 CLIENT_NS="${CLIENT_NS}"
 BOTTLENECK_NS="${BOTTLENECK_NS}"
@@ -398,10 +468,11 @@ SETUP_ID="${DOWNSTREAM_THROUGHPUT} ${UPSTREAM_THROUGHPUT} ${DELAY_FROM_INET} ${D
 NEED_MIRRORING="${NEED_MIRRORING}"
 EOF
 else
+  local IFS=$','
   cat << EOF >> "/tmp/VARS"
 CLIENT_NS="${CLIENT_NS}"
 BOTTLENECK_NS="${BOTTLENECK_NS}"
-SERVER_NS="${SERVER_NS}"
+SERVER_NS_STRING="${SERVER_NS[*]}"
 SETUP_ID="${DOWNSTREAM_THROUGHPUT} ${UPSTREAM_THROUGHPUT} ${DELAY_FROM_INET} ${DELAY_TO_INET}"
 NEED_MIRRORING="${NEED_MIRRORING}"
 EOF
@@ -416,13 +487,22 @@ function destroy {
   ip netns del "${CLIENT_NS}" &>/dev/null
   ip netns pids "${BOTTLENECK_NS}" | xargs -r kill
   ip netns del "${BOTTLENECK_NS}" &>/dev/null
-  if [ -n "$INET_IFACE" ]; then
+  # read SERVER_NS array from the variable SERVER_NS_STRING
+  # in case we were in NAT mode, we do not write SERVER_NS_STRING to /tmp/VARS, but due to how bash works, the array will be empty anyway
+  local IFS=$','
+  read -r -a SERVER_NS <<< "${SERVER_NS_STRING}"
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
     ip link del veth1
     echo "restoring iptables"
     iptables-restore < "/tmp/iptables_rules.v4"
   else
-    ip netns pids "${SERVER_NS}" | xargs -r kill
-    ip netns del "${SERVER_NS}" &>/dev/null
+    # remove all server namespaces
+    for server_ns in "${SERVER_NS[@]}"; do
+      ip netns pids "${server_ns}" | xargs -r kill
+      ip netns del "${server_ns}" &>/dev/null
+    done
+    #ip netns pids "${SERVER_NS}" | xargs -r kill
+    #ip netns del "${SERVER_NS}" &>/dev/null
   fi
   # remove any queuing disciplines outside the namespaces
   # tc qdisc delete dev veth1 root
