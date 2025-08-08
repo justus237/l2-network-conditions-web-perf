@@ -8,19 +8,19 @@ def calculate_burst(bandwidth):
 	if bandwidth.endswith("Mbit"):
 		bandwidth = bandwidth.removesuffix("Mbit")
 		burst = int(int(bandwidth) * 1000000/2000)
-		if burst < 1500:
-			print("1500")
+		if burst < 3000:
+			print("3000")
 		else:
 			print(burst)
 	elif bandwidth.endswith("kbit"):
 		bandwidth = bandwidth.removesuffix("kbit")
 		burst = int(int(bandwidth) * 1000/2000)
-		if burst < 1500:
-			print("1500")
+		if burst < 3000:
+			print("3000")
 		else:
 			print(burst)
 	else:
 		# default value
-		print("1500")
+		print("3000")
 if __name__ == "__main__":
    calculate_burst(sys.argv[1])

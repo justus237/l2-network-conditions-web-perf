@@ -11,8 +11,8 @@ def calculate_buffer(bandwidth, delay1, delay2):
 		delay2 = int(delay2.removesuffix("ms"))
 		rtt = delay1+delay2
 		buffer_bytes = int(rtt * bandwidth * 1000 / 8)
-		if buffer_bytes < 1500:
-			print("1500")
+		if buffer_bytes < 3000:
+			print("3000")
 		else:
 			print(buffer_bytes)
 	elif bandwidth.endswith("kbit"):
@@ -21,12 +21,12 @@ def calculate_buffer(bandwidth, delay1, delay2):
 		delay2 = int(delay2.removesuffix("ms"))
 		rtt = delay1+delay2
 		buffer_bytes = int(rtt * bandwidth / 8)
-		if buffer_bytes < 1500:
-			print("1500")
+		if buffer_bytes < 3000:
+			print("3000")
 		else:
 			print(buffer_bytes)
 	else:
 		# default value is MTU?
-		print("1500")
+		print("3000")
 if __name__ == "__main__":
    calculate_buffer(sys.argv[1], sys.argv[2], sys.argv[3])
