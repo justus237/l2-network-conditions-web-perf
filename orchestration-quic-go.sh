@@ -63,7 +63,7 @@ function run_experiment_for_defense {
 	export SSLKEYLOGFILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey.log
 	export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5
 	export MOZ_LOG_FILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/firefox
-	ip netns exec client-net python3 /home/fries/website-fingerprinting/website-fingerprinting-measurement/measure-website-firefox.py "${uri}" "${msmID}" "${DEFENSE}"
+	ip netns exec client-net python3 "$PWD/measure-website-firefox.py" "${uri}" "${msmID}" "${DEFENSE}"
 	kill -SIGINT $tcpdumpclientPID
 	wait $tcpdumpclientPID
 	kill -SIGINT $tcpdumpmiddlePID
@@ -72,7 +72,7 @@ function run_experiment_for_defense {
 	#	kill -SIGINT $tcpdumpserverPID
 	#	wait $tcpdumpserverPID
 	#done
-	kill -SIGTERM $nginxPID
+	#kill -SIGTERM $nginxPID
 	wait $nginxPID
 	./setup-shaping.sh DELETE
 }
