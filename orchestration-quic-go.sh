@@ -64,6 +64,8 @@ function run_experiment_for_defense {
 	export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5
 	export MOZ_LOG_FILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/firefox
 	ip netns exec client-net python3 "$PWD/measure-website-firefox.py" "${uri}" "${msmID}" "${DEFENSE}"
+	#TODO: maybe use exit code of this script as success indicator
+	
 	kill -SIGINT $tcpdumpclientPID
 	wait $tcpdumpclientPID
 	kill -SIGINT $tcpdumpmiddlePID
@@ -73,7 +75,7 @@ function run_experiment_for_defense {
 	#	wait $tcpdumpserverPID
 	#done
 	#kill -SIGTERM $nginxPID
-	wait $nginxPID
+	#wait $nginxPID
 	./setup-shaping.sh DELETE
 }
 

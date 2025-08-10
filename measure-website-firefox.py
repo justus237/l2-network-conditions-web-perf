@@ -241,4 +241,3 @@ def perform_page_load():
 
 exit_code = perform_page_load()
 sys.exit(exit_code)
-
