@@ -5,6 +5,10 @@ if [[ $EUID -ne 0 ]]; then
 	exit 2
 fi
 
+#undefended -> nothing in both
+#front-client -> front in neqo and nothing in quic-go
+#front-server -> front-client-only in neqo and front in quic-go
+
 function run_experiment_for_defense {
 	local DEFENSE=$1
 	echo $DEFENSE
@@ -36,7 +40,7 @@ function run_experiment_for_defense {
 	for (( i=0; i<${#SERVERS[@]}; i++ )); do
 		# see setup-shaping.sh for the IP address calculation
 		IP_OF_HOST="10.237.0.$((i + 3))"
-		if [[ ${DEFENSE} == "undefended" || ${DEFENSE} == "front-client" ]]; then
+		if [[ ${DEFENSE} == "undefended" || ${DEFENSE} == "front-client" || ${DEFENSE} == "testing" ]]; then
 			# no front defense, so we use the h3-replay-server
 			ip netns exec server-net ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
 		elif [[ ${DEFENSE} == "front-server" ]]; then
@@ -74,13 +78,21 @@ function run_experiment_for_defense {
 }
 
 iterations=$1
-#while true; do
-for ((i=1; i<=iterations; i++)); do
-echo "Iteration $i"
-while read uri; do
-	echo ${uri}
-	run_experiment_for_defense "undefended"
-	run_experiment_for_defense "front-client"
-	run_experiment_for_defense "front-server"
-done < websites.txt
-done
+# if iterations is not a number but instead "testing" we run the experiment only once and call it testing
+if [[ $iterations == "testing" ]]; then
+	echo "Running testing iteration"
+	while read uri; do
+		echo ${uri}
+		run_experiment_for_defense "testing"
+	done < websites.txt
+else
+	for ((i=1; i<=iterations; i++)); do
+	echo "Iteration $i"
+		while read uri; do
+			echo ${uri}
+			run_experiment_for_defense "undefended"
+			run_experiment_for_defense "front-client"
+			run_experiment_for_defense "front-server"
+		done < websites.txt
+	done
+fi

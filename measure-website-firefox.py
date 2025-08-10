@@ -37,6 +37,24 @@ else:
 log_dir = base_path+msm_id+"-"+service_names[full_uri]+"/"
 #os.makedirs(log_dir, exist_ok=True)
 
+ASYNC_PERF_SCRIPT = """
+const return_to_selenium = arguments[0];
+const navigationEntries = performance.getEntriesByType("navigation");
+const paintEntries = performance.getEntriesByType("paint");
+let result = {};
+result.navigation = navigationEntries[0].toJSON();
+result.paint = paintEntries.map((timingItem) => timingItem.toJSON());
+result.timeOrigin = performance.timeOrigin;
+//technically the resource timings are also buffered, but the initial value should be large enough?
+const resources = performance.getEntriesByType('resource');
+result.resource = resources.map((timingItem) => timingItem.toJSON());
+new PerformanceObserver((entryList) => {
+    result.largestContentfulPaint = entryList.getEntries().map((timingItem) => timingItem.toJSON());
+    return_to_selenium(result);
+}).observe({type: 'largest-contentful-paint', buffered: true});
+"""
+
+
 def create_driver_with_default_options():
     options = Options()
     options.add_argument("--headless")
@@ -181,7 +199,7 @@ def get_page_performance_metrics_and_write_logs(driver):
             driver.execute_script(dns_override_script)
         driver.get(full_uri)
         print(service_names[full_uri])
-        perf = driver.execute_async_script(async_script_perf)
+        perf = driver.execute_async_script(ASYNC_PERF_SCRIPT)
         with open(log_dir+'perf.json', 'w') as file:
             json.dump(perf, file)
         driver.get_screenshot_as_file(log_dir+"replay.png")
