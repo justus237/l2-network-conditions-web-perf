@@ -85,7 +85,7 @@ def create_driver_with_default_options():
     profile.set_preference("dom.disable_beforeunload", True)
     #you need to have $TMPDIR set, otherwise this won't work
     profile.set_preference('network.http.http3.enable_qlog', True)
-    #profile.set_preference('network.dns.forceResolve', '192.168.0.2')
+    profile.set_preference('network.dns.forceResolve', '')
     profile.set_preference('network.dns.disableIPv6', True)
 
     profile.set_preference('network.http.http3.alt-svc-mapping-for-testing', '*;h3=":443"')
@@ -197,6 +197,7 @@ def get_page_performance_metrics_and_write_logs(driver):
                 dns_override_script += f'gOverride.addIPOverride("{hostname}", "{ip_address}");\n'
         with driver.context("chrome"):
             driver.execute_script(dns_override_script)
+        print(dns_override_script)
         driver.get(full_uri)
         print(service_names[full_uri])
         perf = driver.execute_async_script(ASYNC_PERF_SCRIPT)
