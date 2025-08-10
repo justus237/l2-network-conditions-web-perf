@@ -85,7 +85,7 @@ def create_driver_with_default_options():
     profile.set_preference("dom.disable_beforeunload", True)
     #you need to have $TMPDIR set, otherwise this won't work
     profile.set_preference('network.http.http3.enable_qlog', True)
-    profile.set_preference('network.dns.forceResolve', '192.168.0.2')
+    #profile.set_preference('network.dns.forceResolve', '192.168.0.2')
     profile.set_preference('network.dns.disableIPv6', True)
 
     profile.set_preference('network.http.http3.alt-svc-mapping-for-testing', '*;h3=":443"')
