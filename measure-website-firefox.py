@@ -211,6 +211,8 @@ def get_page_performance_metrics_and_write_logs(driver):
         driver.get_screenshot_as_file(log_dir+'ERROR.png')
         if error_str == "":
             error_str = "unknown error"
+        with open(log_dir+"error.txt", 'w', encoding='utf-8') as f:
+            f.write(error_str)
         return error_str
 
 
