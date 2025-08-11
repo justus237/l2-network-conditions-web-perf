@@ -65,7 +65,8 @@ readonly INET_IFACE=$6
 ### any length > 1 declares how many server namespaces exist
 SERVER_NS=()
 
-if [ -z "$INET_IFACE" ]; then
+#maybe this should be -v INET_IFACE
+if [[ -z "$INET_IFACE" ]]; then
   echo "INET_IFACE is not set, creating a single server namespace."
   SERVER_NS+=("server-net")
 elif ip link show "${INET_IFACE}" &>/dev/null; then
@@ -297,7 +298,7 @@ function setup_bottleneck_bridge {
 }
 
 function setup_ip {
-  echo "setting up ip addresses"
+  echo "setting up ipv4 addresses and disabling ipv6"
   # add ip addresses
 
   if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
@@ -404,6 +405,38 @@ function setup_iptables {
   iptables -A FORWARD -o "${INET_IFACE}" -i veth1 -j ACCEPT
 }
 
+
+function setup_arp {
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    # disable automatic ARP discovery first and then set up ARP manually
+    ip -netns "$CLIENT_NS" link set veth0 arp off
+    ip link set veth1 arp off
+    #get MAC address of veth0 in client namespace
+    MAC_ADDR_CLIENT=$(ip -netns "${CLIENT_NS}" link show veth0 | awk '/link\/ether/ {print $2}')
+    #get MAC address of veth1 in host namespace
+    MAC_ADDR_SERVER=$(ip link show veth1 | awk '/link\/ether/ {print $2}')
+    #set up ARP for veth0 in client namespace to reach IP of veth1 in host namespace
+    ip -netns "$CLIENT_NS" neigh add 10.237.0.3 lladdr "${MAC_ADDR_SERVER}" dev veth0
+    #set up ARP for veth1 in host namespace to reach IP of veth0 in client namespace
+    ip neigh add 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
+  else
+    ip netns exec "$CLIENT_NS" ip link set veth0 arp off
+    # if we have server namespaces, we need to set up ARP for each of them
+    #client MAC is the same all the time
+    MAC_ADDR_CLIENT=$(ip -netns "${CLIENT_NS}" link show veth0 | awk '/link\/ether/ {print $2}')
+    for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+      server_ns="${SERVER_NS[$i]}"
+      ip -netns "${server_ns}" link set veth1 arp off
+      # get MAC address of veth1 in server namespace
+      MAC_ADDR_SERVER=$(ip -netns "${server_ns}" link show veth1 | awk '/link\/ether/ {print $2}')
+      # set up ARP for veth1 in server namespace to reach IP of veth0 in client namespace
+      ip -netns "${server_ns}" neigh add 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
+      # set up ARP for veth0 in client namespace to reach IP of veth1 in server namespace
+      ip -netns "${CLIENT_NS}" neigh add "10.237.0.$((i + 3))" lladdr "${MAC_ADDR_SERVER}" dev veth0
+    done
+  fi
+}   
+
 #for all veth pairs and bridges: create -> set ip addresses/assign veth ends to bridge -> set up
 
 function create {
@@ -441,6 +474,8 @@ function create {
   setup_ip
   
   setup_dns
+
+  setup_arp
   
   if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
     setup_iptables
@@ -449,14 +484,14 @@ function create {
   echo "sanity ping"
   
   if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
-    ip netns exec "${CLIENT_NS}" ping -c 3 10.237.0.3
-    ping -c 3 10.237.0.2
+    ip netns exec "${CLIENT_NS}" ping -c 1 10.237.0.3
+    ping -c 1 10.237.0.2
   else
     # ping each server namespace and vice versa
     for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
       echo "pinging from/to ${SERVER_NS[$i]}"
-      ip netns exec "${CLIENT_NS}" ping -c 3 "10.237.0.$((i + 3))"
-      ip netns exec "${SERVER_NS[$i]}" ping -c 3 10.237.0.2
+      ip netns exec "${CLIENT_NS}" ping -c 1 "10.237.0.$((i + 3))"
+      ip netns exec "${SERVER_NS[$i]}" ping -c 1 10.237.0.2
     done
   fi
   # write to vars
