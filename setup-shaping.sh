@@ -419,6 +419,8 @@ function setup_arp {
     ip -netns "$CLIENT_NS" neigh add 10.237.0.3 lladdr "${MAC_ADDR_SERVER}" dev veth0
     #set up ARP for veth1 in host namespace to reach IP of veth0 in client namespace
     ip neigh add 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
+    ip -netns "${CLIENT_NS}" neigh show
+    ip neigh show
   else
     ip netns exec "$CLIENT_NS" ip link set veth0 arp off
     # if we have server namespaces, we need to set up ARP for each of them
@@ -433,9 +435,11 @@ function setup_arp {
       ip -netns "${server_ns}" neigh add 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
       # set up ARP for veth0 in client namespace to reach IP of veth1 in server namespace
       ip -netns "${CLIENT_NS}" neigh add "10.237.0.$((i + 3))" lladdr "${MAC_ADDR_SERVER}" dev veth0
+      ip -netns "${CLIENT_NS}" neigh show
+      ip -netns "${server_ns}" neigh show
     done
   fi
-}   
+}
 
 #for all veth pairs and bridges: create -> set ip addresses/assign veth ends to bridge -> set up
 
@@ -492,6 +496,8 @@ function create {
       echo "pinging from/to ${SERVER_NS[$i]}"
       ip netns exec "${CLIENT_NS}" ping -c 1 "10.237.0.$((i + 3))"
       ip netns exec "${SERVER_NS[$i]}" ping -c 1 10.237.0.2
+      ip -netns "${CLIENT_NS}" neigh show
+      ip -netns "${SERVER_NS[$i]}" neigh show
     done
   fi
   # write to vars
