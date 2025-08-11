@@ -493,21 +493,21 @@ function create {
     setup_iptables
   fi
   
-  echo "sanity ping"
+  # echo "sanity ping"
   
-  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
-    ip netns exec "${CLIENT_NS}" ping -c 1 10.237.0.3
-    ping -c 1 10.237.0.2
-  else
-    # ping each server namespace and vice versa
-    for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
-      echo "pinging from/to ${SERVER_NS[$i]}"
-      ip netns exec "${SERVER_NS[$i]}" ping -c 1 10.237.0.2
-      ip netns exec "${CLIENT_NS}" ping -c 1 "10.237.0.$((i + 3))"
-      #ip -netns "${CLIENT_NS}" neigh show
-      #ip -netns "${SERVER_NS[$i]}" neigh show
-    done
-  fi
+  # if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+  #   ip netns exec "${CLIENT_NS}" ping -c 1 10.237.0.3
+  #   ping -c 1 10.237.0.2
+  # else
+  #   # ping each server namespace and vice versa
+  #   for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+  #     echo "pinging from/to ${SERVER_NS[$i]}"
+  #     ip netns exec "${SERVER_NS[$i]}" ping -c 1 10.237.0.2
+  #     ip netns exec "${CLIENT_NS}" ping -c 1 "10.237.0.$((i + 3))"
+  #     #ip -netns "${CLIENT_NS}" neigh show
+  #     #ip -netns "${SERVER_NS[$i]}" neigh show
+  #   done
+  # fi
   # write to vars
   if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
   cat << EOF >> "/tmp/VARS"
