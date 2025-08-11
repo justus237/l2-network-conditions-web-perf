@@ -1,5 +1,6 @@
 #!/bin/bash
-#set -ex
+#set -e
+# in functions you should "|| exit 1" after commands to fail early
 
 #TODO: ensure that MTU is set correctly, that MTU is set correctly and that a local dns resolver exists
 

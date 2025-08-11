@@ -222,7 +222,15 @@ def perform_page_load():
     driver.set_page_load_timeout(60)
     error = get_page_performance_metrics_and_write_logs(driver)
     log_file=log_dir+"firefox.moz_log"
-    if "front" in defence:
+    defense_state_dir = log_dir+"defense-state/"
+    if "front" in defence and os.path.exists(defense_state_dir):
+        # wait until the directory "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/" is empty or 15 seconds have passed
+        for i in range(3):
+            if len(os.listdir(defense_state_dir)) > 0:
+                print("waiting for defense to finish for 5 seconds")
+                time.sleep(5)
+            else:
+                break
         # while True:
         #     try:
         #         with open(log_file, 'r') as f:
@@ -233,8 +241,7 @@ def perform_page_load():
         #     except FileNotFoundError:
         #         # File doesn't exist yet, continue waiting
         #         pass
-        print("waiting for defense to finish for 15 seconds")
-        time.sleep(15)
+        
     driver.quit()
     if error == "":
         return 0
