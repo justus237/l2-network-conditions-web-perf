@@ -84,12 +84,26 @@ function run_experiment_for_defense {
 iterations=$1
 # if iterations is not a number but instead "testing" we run the experiment only once and call it testing
 if [[ $iterations == "testing" ]]; then
-	echo "Running testing iteration"
+	echo "Running testing"
 	while read uri; do
 		echo ${uri}
 		run_experiment_for_defense "testing"
 	done < websites.txt
+elif [[ $iterations == "front-client" ]]; then
+	echo "Running front-client"
+	while read uri; do
+		echo ${uri}
+		run_experiment_for_defense "front-client"
+	done < websites.txt
+elif [[ $iterations == "front-server" ]]; then
+	echo "Running front-server"
+	while read uri; do
+		echo ${uri}
+		run_experiment_for_defense "front-server"
+	done < websites.txt
 else
+	#not sure what happens if you cannot interpret the iterations variable as a number
+	echo "Running $iterations iterations"
 	for ((i=1; i<=iterations; i++)); do
 	echo "Iteration $i"
 		while read uri; do
