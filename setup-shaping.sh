@@ -445,6 +445,8 @@ function setup_arp {
       ip netns exec "${BOTTLENECK_NS}" bridge fdb replace "${MAC_ADDR_SERVER}" dev "veth$((i + 1))" master static
     done
   fi
+  # need to sleep or the pings fail
+  sleep 2
 }
 
 #for all veth pairs and bridges: create -> set ip addresses/assign veth ends to bridge -> set up
