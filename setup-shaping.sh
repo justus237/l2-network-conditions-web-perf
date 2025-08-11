@@ -421,13 +421,15 @@ function setup_arp {
     ip neigh add 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
     #ip -netns "${CLIENT_NS}" neigh show
     #ip neigh show
+    ip netns exec "${BOTTLENECK_NS}" bridge fdb replace "${MAC_ADDR_CLIENT}" dev veth0 master static
+    ip netns exec "${BOTTLENECK_NS}" bridge fdb replace "${MAC_ADDR_SERVER}" dev veth1 master static
   else
     ip netns exec "$CLIENT_NS" ip link set veth0 arp off
     # if we have server namespaces, we need to set up ARP for each of them
     #client MAC is the same all the time
     MAC_ADDR_CLIENT=$(ip -netns "${CLIENT_NS}" link show veth0 | awk '/link\/ether/ {print $2}')
     # NOTE that "permanent" means something completely different for the bridge command
-    ip netns exec "${BOTTLENECK_NS}" bridge fdb add "${MAC_ADDR_CLIENT}" dev veth0 master static
+    ip netns exec "${BOTTLENECK_NS}" bridge fdb replace "${MAC_ADDR_CLIENT}" dev veth0 master static
     for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
       server_ns="${SERVER_NS[$i]}"
       ip -netns "${server_ns}" link set veth1 arp off
@@ -440,8 +442,7 @@ function setup_arp {
       #ip -netns "${CLIENT_NS}" neigh show
       #ip -netns "${server_ns}" neigh show
       # also need to add the MAC address to the fdb of the bridge
-      ip netns exec "${BOTTLENECK_NS}" bridge fdb add "${MAC_ADDR_SERVER}" dev "veth$((i + 1))" master static
-
+      ip netns exec "${BOTTLENECK_NS}" bridge fdb replace "${MAC_ADDR_SERVER}" dev "veth$((i + 1))" master static
     done
   fi
 }
