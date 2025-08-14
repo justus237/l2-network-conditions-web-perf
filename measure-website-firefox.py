@@ -197,7 +197,7 @@ def get_page_performance_metrics_and_write_logs(driver):
                 dns_override_script += f'gOverride.addIPOverride("{hostname}", "{ip_address}");\n'
         with driver.context("chrome"):
             driver.execute_script(dns_override_script)
-        print(dns_override_script)
+        #print(dns_override_script)
         driver.get(full_uri)
         print(service_names[full_uri])
         perf = driver.execute_async_script(ASYNC_PERF_SCRIPT)
