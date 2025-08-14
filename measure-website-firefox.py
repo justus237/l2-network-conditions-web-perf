@@ -103,7 +103,7 @@ def create_driver_with_default_options():
         #defence_seed = random.getrandbits(32)
     elif defence in ["front-client-and-server-controlled-bidir", "front-client-controlled-unidir"]:
         use_defence = 2
-    elif defence == "undefended" or defence == "testing":
+    else:
         use_defence = 0
         #defence_seed = 0
     profile.set_preference('network.http.http3.defense', use_defence)
