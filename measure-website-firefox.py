@@ -98,10 +98,10 @@ def create_driver_with_default_options():
     profile.set_preference('network.trr.mode', 5)
     # !!! this one should be the only preference  we need !!!
     profile.set_preference('network.http.http3.force-quic-on-all-connections', True)
-    if defence == "front-client":
+    if defence in ["front-client-controlled-bidir"]:
         use_defence = 1
         #defence_seed = random.getrandbits(32)
-    elif defence == "front-server":
+    elif defence in ["front-client-and-server-controlled-bidir", "front-client-controlled-unidir"]:
         use_defence = 2
     elif defence == "undefended" or defence == "testing":
         use_defence = 0
@@ -223,7 +223,7 @@ def perform_page_load():
     error = get_page_performance_metrics_and_write_logs(driver)
     log_file=log_dir+"firefox.moz_log"
     defense_state_dir = log_dir+"defense-state/"
-    if "front" in defence and os.path.exists(defense_state_dir):
+    if defence in ["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] and os.path.exists(defense_state_dir):
         # wait until the directory "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/" is empty or 15 seconds have passed
         for i in range(3):
             if len(os.listdir(defense_state_dir)) > 0:

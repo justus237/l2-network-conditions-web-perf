@@ -8,6 +8,9 @@ fi
 #undefended -> nothing in both
 #front-client -> front in neqo and nothing in quic-go
 #front-server -> front-client-only in neqo and front in quic-go
+#["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] -> uses neqo
+#["front-client-and-server-controlled-bidir", "front-server-controlled-unidir"] -> uses quic-go
+# unidir for now implies FROM the entity that controls the defense
 
 function run_experiment_for_defense {
 	local DEFENSE=$1
@@ -37,15 +40,15 @@ function run_experiment_for_defense {
 	#done
 	# example usage of server: TRACE_CSV_DIR=./ ./h3-replay-server --dir /data/website-fingerprinting/webpage-replay/replay/${shortname} --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "$origins" --frontdefense
 	# the ip address of the host is determined by its position in the servers array
-	
+
 	export QUIC_GO_LOG_LEVEL=DEBUG
 	for (( i=0; i<${#SERVERS[@]}; i++ )); do
 		# see setup-shaping.sh for the IP address calculation
 		IP_OF_HOST="10.237.0.$((i + 3))"
-		if [[ ${DEFENSE} == "undefended" || ${DEFENSE} == "front-client" || ${DEFENSE} == "testing" ]]; then
+		if [[ ${DEFENSE} == "undefended" || ${DEFENSE} == "front-client-controlled-bidir" || ${DEFENSE} == "front-client-controlled-unidir" || ${DEFENSE} == "testing" ]]; then
 			# no front defense, so we use the h3-replay-server
 			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
-		elif [[ ${DEFENSE} == "front-server" ]]; then
+		elif [[ ${DEFENSE} == "front-client-and-server-controlled-bidir" || ${DEFENSE} == "front-server-controlled-unidir" ]]; then
 			# front defense, so we use the neqo-bin server
 			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --frontdefense >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
 		fi
@@ -86,22 +89,34 @@ function run_experiment_for_defense {
 iterations=$1
 # if iterations is not a number but instead "testing" we run the experiment only once and call it testing
 if [[ $iterations == "testing" ]]; then
-	echo "Running testing"
+	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
 		run_experiment_for_defense "testing"
 	done < websites.txt
-elif [[ $iterations == "front-client" ]]; then
-	echo "Running front-client"
+elif [[ $iterations == "front-client-controlled-bidir" ]]; then
+	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
-		run_experiment_for_defense "front-client"
+		run_experiment_for_defense "front-client-controlled-bidir"
 	done < websites.txt
-elif [[ $iterations == "front-server" ]]; then
-	echo "Running front-server"
+elif [[ $iterations == "front-client-and-server-controlled-bidir" ]]; then
+	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
-		run_experiment_for_defense "front-server"
+		run_experiment_for_defense "front-client-and-server-controlled-bidir"
+	done < websites.txt
+elif [[ $iterations == "front-server-controlled-unidir" ]]; then
+	echo "Running ${iterations}"
+	while read uri; do
+		echo ${uri}
+		run_experiment_for_defense "front-server-controlled-unidir"
+	done < websites.txt
+elif [[ $iterations == "front-client-controlled-unidir" ]]; then
+	echo "Running ${iterations}"
+	while read uri; do
+		echo ${uri}
+		run_experiment_for_defense "front-client-controlled-unidir"
 	done < websites.txt
 else
 	#not sure what happens if you cannot interpret the iterations variable as a number
@@ -111,8 +126,8 @@ else
 		while read uri; do
 			echo ${uri}
 			run_experiment_for_defense "undefended"
-			run_experiment_for_defense "front-client"
-			run_experiment_for_defense "front-server"
+			run_experiment_for_defense "front-client-controlled-bidir"
+			run_experiment_for_defense "front-client-and-server-controlled-bidir"
 		done < websites.txt
 	done
 fi
