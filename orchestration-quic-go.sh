@@ -20,7 +20,7 @@ function run_experiment_for_defense {
 	echo ${shortname}
 	# read /data/website-fingerprinting/webpage-replay/replay/$shortname/servers-and-hostnames.txt
 	IFS=';' read -ra SERVERS < /data/website-fingerprinting/webpage-replay/replay/${shortname}/servers-and-hostnames.txt
-	mkdir /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}
+	mkdir -p /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}
 	
 	echo "10Mbit 5Mbit 10ms 10ms"
 	#setup shaping with number of servers
