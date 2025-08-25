@@ -66,7 +66,7 @@ function run_experiment_for_defense {
 
 	export TMPDIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}
 	export SSLKEYLOGFILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey.log
-	export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5
+	export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5,neqo_http3::*:5
 	export MOZ_LOG_FILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/firefox
 	mkdir /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/
 	export DEFENSE_STATE_DIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/

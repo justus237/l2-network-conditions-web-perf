@@ -66,6 +66,7 @@ readonly INET_IFACE=$6
 ### any length > 1 declares how many server namespaces exist
 SERVER_NS=()
 
+#TODO: move this namespace naming and creating stuff down to the setup function without breaking anything
 #maybe this should be -v INET_IFACE
 if [[ -z "$INET_IFACE" ]]; then
   echo "INET_IFACE is not set, creating a single server namespace."
