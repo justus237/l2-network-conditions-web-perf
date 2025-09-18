@@ -30,7 +30,8 @@ measurement_schema = {
             "service_uri": "string",
             "defense": "string",
             "error": "string",
-            "unfinished_defenses": "integer"
+            "unfinished_defenses": "integer",
+            "rough_timestamp": "double"
             }
 navigation_schema = {
             "msm_id": "string",
@@ -175,6 +176,7 @@ for defense_subdir in Path(base_path).iterdir():
                     if defense_state_dir.is_dir():
                         unfinished_files = list(defense_state_dir.iterdir())
                         current_measurement['unfinished_defenses'] = len(unfinished_files)
+                    current_measurement['rough_timestamp'] = measurement_dir.stat().st_mtime
                     # independently of the perf.json existing, there might be an error file, which we need for the measurements table
                     error_file = measurement_dir / "error.txt"
                     if error_file.is_file():
