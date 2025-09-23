@@ -11,6 +11,7 @@ fi
 #["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] -> uses neqo
 #["front-client-and-server-controlled-bidir", "front-server-controlled-unidir"] -> uses quic-go
 # unidir for now implies FROM the entity that controls the defense
+# TODO: implement disabling connection reuse by using the root cert instead of a cert with SANs
 
 function run_experiment_for_defense {
 	local DEFENSE=$1
@@ -127,6 +128,7 @@ else
 			echo ${uri}
 			run_experiment_for_defense "undefended"
 			run_experiment_for_defense "front-client-controlled-bidir"
+			run_experiment_for_defense "front-client-controlled-unidir"
 			run_experiment_for_defense "front-client-and-server-controlled-bidir"
 		done < websites.txt
 	done
