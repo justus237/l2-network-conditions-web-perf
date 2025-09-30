@@ -8,12 +8,12 @@
 
 # Topology:
 # 
-#     |    client-net     |            bottleneck-net            |      NAT/server-net-{1..n}       |
-#     |                   |             netem + tbf              |                                  |
-#     |   -----------     |     -----------------------------    |                                  |
-#     |   |  veth0  | --------- | veth0, ifb0 -- ifb1, veth1 | --------- veth{1..n} ------------------- Inet
-#     |   -----------     |     -----------------------------    |                                  |
-#         10.237.0.2                                                      10.237.0.3
+#     |    client-net     |            bottleneck-net                      |      NAT/server-net-{1..n}       |
+#     |                   |             netem + tbf                        |                                  |
+#     |   -----------     |     ---------------------------------------    |                                  |
+#     |   |  veth0  | --------- | veth0, ifb0 -- ifb{1..n}, veth{1..n}|-------------- veth1 in each ns ------------------- Inet
+#     |   -----------     |     ---------------------------------------    |                                  |
+#         10.237.0.2                                                                  10.237.0.{3..n+2}
 
 
 
@@ -186,15 +186,34 @@ function setup_client_ns {
 
 function setup_mirrored_ifaces {
   #technically we should do some more checks here, we dont need all mirrors if one of the shapings is set to NO_SHAPING
-  echo "Setting up mirrored interface to shape traffic coming from the Internet."
-  ip link add dev ifb1 netns "${BOTTLENECK_NS}" type ifb
-  ip -netns "${BOTTLENECK_NS}" link set ifb1 up
-  ip -netns "${BOTTLENECK_NS}" link set dev ifb1 gso_max_segs 1
-  ip netns exec "${BOTTLENECK_NS}" ethtool -K ifb1 tso off gso off gro off
-  ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb1 rx off tx off
-  #veth1 ingress is redirected to ifb1
-  ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth1 handle ffff: ingress
-  ip netns exec "${BOTTLENECK_NS}" tc filter add dev veth1 parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb1
+  #### THIS NEEDS TO BE FIXED FOR THE MULTI-SERVER NAMESPACE CASE
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    echo "Setting up mirrored interface to shape traffic coming from the Internet."
+    ip link add dev ifb1 netns "${BOTTLENECK_NS}" type ifb
+    ip -netns "${BOTTLENECK_NS}" link set ifb1 up
+    ip -netns "${BOTTLENECK_NS}" link set dev ifb1 gso_max_segs 1
+    ip netns exec "${BOTTLENECK_NS}" ethtool -K ifb1 tso off gso off gro off
+    ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb1 rx off tx off
+    #veth1 ingress is redirected to ifb1
+    ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth1 handle ffff: ingress
+    ip netns exec "${BOTTLENECK_NS}" tc filter add dev veth1 parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb1
+  else
+    echo "Setting up mirrored interfaces for multiple server namespaces."
+    # iterate over all server namespaces and set up a mirrored interface for each of them
+    for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+      echo "Setting up mirrored interface for server namespace ${i} (${SERVER_NS[$i]})."
+      echo "veth$((i + 1)) will be mirrored to ifb$((i + 1))."
+      ip link add dev ifb$((i + 1)) netns "${BOTTLENECK_NS}" type ifb
+      ip -netns "${BOTTLENECK_NS}" link set ifb$((i + 1)) up
+      ip -netns "${BOTTLENECK_NS}" link set dev ifb$((i + 1)) gso_max_segs 1
+      ip netns exec "${BOTTLENECK_NS}" ethtool -K ifb$((i + 1)) tso off gso off gro off
+      ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb$((i + 1)) rx off tx off
+      #vethi+1 ingress is redirected to ifbi+1
+      ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev "veth$((i + 1))" handle ffff: ingress
+      ip netns exec "${BOTTLENECK_NS}" tc filter add dev "veth$((i + 1))" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev "ifb$((i + 1))"
+      done
+  fi
+
   echo "Setting up mirrored interfaces to shape traffic coming in from the client"
   ip link add dev ifb0 netns "${BOTTLENECK_NS}" type ifb
   ip -netns "${BOTTLENECK_NS}" link set ifb0 up
@@ -207,23 +226,24 @@ function setup_mirrored_ifaces {
 }
 
 function setup_shaping {
+  #### THIS NEEDS TO BE FIXED FOR THE MULTI-SERVER NAMESPACE CASE, WE ARE ONLY SHAPING FOR THE FIRST SERVER NAMESPACE, effectively only limiting uplink throughput and downlink delay...
   #feel like this could be simplified somehow..
   #i.e. one thing could be moving the check for no_shaping before the BDP python script (calculate-buffer) into the python script
   #downlink direction
   #both netem and tbf
-  #client <- veth0 (netem) <- ifb1 (tbf) <- server
-  #no netem
+  #client <- veth0 (netem) <- ifb1 (or ifb$((i + 1))) (tbf) <- server
+  #no netem -- doesnt use ifb
   #client <- veth0 (tbf) <- server
-  #no tbf
+  #no tbf -- doesnt use ifb
   #client <- veth0 (netem) <- server
 
   #uplink direction
   #both netem and tbf
   #client -> ifb0 (tbf) -> veth1 (netem) -> server
-  #no netem
-  #client -> veth1 (tbf) -> server
-  #no tbf
-  #client -> veth1 (netem) -> server
+  #no netem -- doesnt use ifb
+  #client -> veth1 (or veth$((i + 1))) (tbf) -> server
+  #no tbf -- doesnt use ifb
+  #client -> veth1 (or veth$((i + 1))) (netem) -> server
   echo "downlink"
   if [[ "${DELAY_FROM_INET}" = "NO_SHAPING" ]]; then
     if [[ "${DOWNSTREAM_THROUGHPUT}" != "NO_SHAPING" ]]; then
@@ -244,34 +264,56 @@ function setup_shaping {
     #netem will always be on veth0
     ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth0 root netem delay "${DELAY_FROM_INET}" limit 1000000
     if [[ "${DOWNSTREAM_THROUGHPUT}" != "NO_SHAPING" ]]; then
-      #downlink with netem, down_tbf on ifb1
+      # downlink with netem, down_tbf on ifb1 - or ifb$((i + 1)) in multi-server-namespace case
+      # do buffer calculations
       downstream_burst=$(python3 "${bundledir}/calculate-burst.py" "${DOWNSTREAM_THROUGHPUT}")
       if [[ "${DELAY_TO_INET}" = "NO_SHAPING" ]]; then
         downstream_buffer_limit=$(python3 "${bundledir}/calculate-buffer.py" "${DOWNSTREAM_THROUGHPUT}" "1ms" "${DELAY_FROM_INET}")
       else
         downstream_buffer_limit=$(python3 "${bundledir}/calculate-buffer.py" "${DOWNSTREAM_THROUGHPUT}" "${DELAY_TO_INET}" "${DELAY_FROM_INET}")
       fi
-      ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev ifb1 root tbf rate "${DOWNSTREAM_THROUGHPUT}" burst "${downstream_burst}" limit "${downstream_buffer_limit}"
+      # multi-server namespace logic comes last
+      if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+        ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev ifb1 root tbf rate "${DOWNSTREAM_THROUGHPUT}" burst "${downstream_burst}" limit "${downstream_buffer_limit}"
+      else
+        for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+          ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev "ifb$((i + 1))" root tbf rate "${DOWNSTREAM_THROUGHPUT}" burst "${downstream_burst}" limit "${downstream_buffer_limit}"
+        done
+      fi
     fi
   fi
   echo "uplink"
   if [[ "${DELAY_TO_INET}" = "NO_SHAPING" ]]; then
     if [[ "${UPSTREAM_THROUGHPUT}" != "NO_SHAPING" ]]; then
-      #uplink without netem
-      #up_tbf on veth1
+      # uplink without netem, up_tbf on veth1 or veth$((i + 1)) in multi-server-namespace case
+      # do buffer calculations
       upstream_burst=$(python3 "${bundledir}/calculate-burst.py" "${UPSTREAM_THROUGHPUT}")
       if [[ "${DELAY_FROM_INET}" = "NO_SHAPING" ]]; then
         upstream_buffer_limit=$(python3 "${bundledir}/calculate-buffer.py" "${UPSTREAM_THROUGHPUT}" "1ms" "1ms")
       else
         upstream_buffer_limit=$(python3 "${bundledir}/calculate-buffer.py" "${UPSTREAM_THROUGHPUT}" "1ms" "${DELAY_FROM_INET}")
       fi
-      ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth1 root tbf rate "${UPSTREAM_THROUGHPUT}" burst "${upstream_burst}" limit "${upstream_buffer_limit}"
+      # multi-server namespace logic comes last
+      if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+        ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth1 root tbf rate "${UPSTREAM_THROUGHPUT}" burst "${upstream_burst}" limit "${upstream_buffer_limit}"
+      else
+        for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+          ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev "veth$((i + 1))" root tbf rate "${UPSTREAM_THROUGHPUT}" burst "${upstream_burst}" limit "${upstream_buffer_limit}"
+        done
+      fi
     fi
   else
-    #netem will always be on veth1
-    ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth1 root netem delay "${DELAY_TO_INET}" limit 1000000
+    # netem will always be on veth1 or veth$((i + 1)) in multi-server-namespace case
+    # multi-server namespace logic can be first, because we dont calculate anything for netem config
+    if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+      ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth1 root netem delay "${DELAY_TO_INET}" limit 1000000
+    else
+      for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+        ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev "veth$((i + 1))" root netem delay "${DELAY_TO_INET}" limit 1000000
+      done
+    fi
     if [[ "${UPSTREAM_THROUGHPUT}" != "NO_SHAPING" ]]; then
-      #uplinik with netem, up_tbf on ifb0
+      #uplink with netem, up_tbf on ifb0
       upstream_burst=$(python3 "${bundledir}/calculate-burst.py" "${UPSTREAM_THROUGHPUT}")
       if [[ "${DELAY_FROM_INET}" = "NO_SHAPING" ]]; then
         upstream_buffer_limit=$(python3 "${bundledir}/calculate-buffer.py" "${UPSTREAM_THROUGHPUT}" "${DELAY_TO_INET}" "1ms")
