@@ -8,7 +8,7 @@ import sqlite3
 
 
 
-defense_types = ["undefended", "front-client-controlled-bidir", "front-client-and-server-controlled-bidir"]
+defense_types = ["undefended", "front-client-controlled-bidir", "front-client-and-server-controlled-bidir", "front-client-controlled-unidir"]
 
 service_names = {}
 #maps from full URIs to short names
