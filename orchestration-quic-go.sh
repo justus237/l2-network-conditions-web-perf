@@ -25,18 +25,19 @@ function run_experiment_for_defense {
 	
 	echo "10Mbit 5Mbit 10ms 10ms"
 	#setup shaping with number of servers
+	# TODO: capture the return code of setup-shaping and if it is not 0, call delete and exit with error
 	./setup-shaping.sh CREATE 10Mbit 5Mbit 10ms 10ms "${#SERVERS[@]}"
 
 	#used by both client and quic-go server
 	export TRACE_CSV_DIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/
 
-	ip netns exec client-net tcpdump -G 3600 -i any -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/client.pcap 2> /tmp/tcpdump-client.log  &
+	ip netns exec client-net tcpdump -i any -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/client.pcap 2> /tmp/tcpdump-client.log  &
 	tcpdumpclientPID=$!
-	ip netns exec bottleneck-net tcpdump -G 3600 -i any -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/middle.pcap 2> /tmp/tcpdump-middle.log &
+	ip netns exec bottleneck-net tcpdump -i any -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/middle.pcap 2> /tmp/tcpdump-middle.log &
 	tcpdumpmiddlePID=$!
 	#tcpdumpserverPIDS=()
 	#for (( i=1; i<=${#SERVERS[@]}; i++ )); do
-	#	ip netns exec server-net tcpdump -G 3600 -i any -w "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$i.pcap" &
+	#	ip netns exec server-net tcpdump -i any -w "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$i.pcap" &
 	#	tcpdumpserverPIDS+=($!)
 	#done
 	# example usage of server: TRACE_CSV_DIR=./ ./h3-replay-server --dir /data/website-fingerprinting/webpage-replay/replay/${shortname} --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "$origins" --frontdefense
