@@ -183,13 +183,18 @@ for defense_subdir in Path(base_path).iterdir():
                         with open(error_file, "r") as ef:
                             error_str = ef.read().strip()
                             current_measurement['error'] = error_str
-                    # insert into measurement table
-                    msm_sql, msm_values = create_insert_statement("measurement", measurement_schema, current_measurement)
-                    c.execute(msm_sql, msm_values)
-                    conn.commit()
 
                     # the web performance results are in measurement_dir/perf.json
                     perf_file = measurement_dir / "perf.json"
+                    # insert into measurement table only if either error.txt or perf.json exist
+                    if error_file.is_file() or perf_file.is_file():
+                        msm_sql, msm_values = create_insert_statement("measurement", measurement_schema, current_measurement)
+                        c.execute(msm_sql, msm_values)
+                        conn.commit()
+                    else:
+                        print(f"Skipping measurement {msmID} of website {full_uri} because neither error.txt nor perf.json exist", file=sys.stderr)
+                        continue
+                    # if perf.json exists, parse it and insert into navigation, lcp, fcp, resources tables
                     if perf_file.is_file():
                         with open(perf_file, "r") as pf:
                             try:
