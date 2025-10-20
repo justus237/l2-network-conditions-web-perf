@@ -164,6 +164,12 @@ for defense_subdir in Path(base_path).iterdir():
                             break
                     if full_uri is None:
                         assert False, f"Full URI for shortname {shortname} not found"
+                    # check if the measurement already exists in the measurements table based on id, shaping, service_uri, defense
+                    c.execute("SELECT COUNT(*) FROM measurement WHERE id=? AND shaping=? AND service_uri=? AND defense=?", (msmID, "10Mbit 5Mbit 10ms 10ms", full_uri, defense_subdir.name))
+                    result = c.fetchone()
+                    if result[0] > 0:
+                        print(f"Measurement {msmID} of website {full_uri} with defense {defense_subdir.name} already exists in database, skipping", file=sys.stderr)
+                        continue
                     current_measurement = dict()
                     current_measurement['id'] = msmID
                     current_measurement['shaping'] = "10Mbit 5Mbit 10ms 10ms"
