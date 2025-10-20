@@ -17,13 +17,19 @@ import subprocess
 from urllib.parse import urlparse
 import os
 import random
+from pathlib import Path
 
 page = str(sys.argv[1])
 print(page)
 msm_id = str(sys.argv[2])
 defence = str(sys.argv[3])
-base_path = "/data/website-fingerprinting/packet-captures/"+defence+"/"
+base_path = "/data/website-fingerprinting/packet-captures/"
+if len(sys.argv) > 4:
+    base_path = sys.argv[4]
+    if not base_path.endswith("/"):
+        base_path += "/"
 
+base_path_defense = base_path +defence+"/"
 
 service_names = {}
 with open("websites.json", "r") as f:
@@ -34,7 +40,7 @@ if page.startswith(('http://', 'https://')):
     full_uri = page
 else:
     full_uri = 'https://'+page
-log_dir = base_path+msm_id+"-"+service_names[full_uri]+"/"
+log_dir = base_path_defense+msm_id+"-"+service_names[full_uri]+"/"
 #os.makedirs(log_dir, exist_ok=True)
 
 ASYNC_PERF_SCRIPT = """
@@ -53,6 +59,127 @@ new PerformanceObserver((entryList) => {
     return_to_selenium(result);
 }).observe({type: 'largest-contentful-paint', buffered: true});
 """
+
+
+measurement_schema = {
+            "id": "string",
+            "shaping": "string",
+            "service_uri": "string",
+            "defense": "string",
+            "error": "string",
+            "unfinished_defenses": "integer",
+            "rough_timestamp": "double"
+            }
+navigation_schema = {
+            "msm_id": "string",
+            "connectEnd": "double",
+            "connectStart": "double",
+            "contentType": "string",
+            "decodedBodySize": "integer",
+            "domComplete": "double",
+            "domContentLoadedEventEnd": "double",
+            "domContentLoadedEventStart": "double",
+            "domInteractive": "double",
+            "domainLookupEnd": "double",
+            "domainLookupStart": "double",
+            "duration": "integer",
+            "encodedBodySize": "integer",
+            "fetchStart": "double",
+            "loadEventEnd": "double",
+            "loadEventStart": "double",
+            "name": "string",
+            "nextHopProtocol": "string",
+            "redirectCount": "integer",
+            "redirectEnd": "double",
+            "redirectStart": "double",
+            "requestStart": "double",
+            "responseEnd": "double",
+            "responseStart": "double",
+            "responseStatus": "integer",
+            "secureConnectionStart": "double",
+            "startTime": "double",
+            "transferSize": "integer"}
+#technically we only really need startTime
+#also apparently the "element" field is not serialized to JSON...
+lcp_schema = {
+            "msm_id": "string",
+            "id": "string",
+            "loadTime": "double",
+            "renderTime": "double",
+            "size": "integer",
+            "startTime": "double",
+            "url": "string"
+}
+#first-paint would be the same but seems to be missing
+fcp_schema = {
+            "msm_id": "string",
+            "startTime": "double",
+}
+
+resources_schema = {
+            "msm_id": "string",
+            "connectEnd": "double",
+            "connectStart": "double",
+            "contentType": "string",
+            "decodedBodySize": "integer",
+            "domainLookupEnd": "double",
+            "domainLookupStart": "double",
+            "duration": "float",
+            "encodedBodySize": "integer",
+            "fetchStart": "double",
+            "initiatorType": "string",
+            "name": "string",
+            "nextHopProtocol": "string",
+            "redirectEnd": "double",
+            "redirectStart": "double",
+            "requestStart": "double",
+            "responseEnd": "double",
+            "responseStart": "double",
+            "responseStatus": "integer",
+            "secureConnectionStart": "double",
+            "startTime": "double",
+            "transferSize": "integer"
+}
+
+def schema_to_sql_create_if_not_exists(table_name: str, schema: dict, key_statement: str = None):
+    sql = f"CREATE TABLE IF NOT EXISTS {table_name} ("
+    for column, col_type in schema.items():
+        sql += f"{column} {col_type}, "
+    if key_statement:
+        sql += key_statement
+    else:
+        sql = sql.rstrip(", ")
+    sql += ");"
+    return sql
+
+def create_insert_statement(table_name: str, schema: dict, data: dict):
+    column_list_ordered = list(schema.keys())
+    columns = ", ".join(column_list_ordered)
+    placeholders = ", ".join(["?"] * len(column_list_ordered))
+    sql = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+    values = [data.get(col, 0) for col in column_list_ordered]
+    return sql, values
+
+
+
+
+#open the sqlite db in base_path/web-performance.db
+db_path = Path(base_path) / "web-performance.db"
+# this script should be atomic so if the file already exists, we should remove it
+
+
+print(f"Using database at {db_path}")
+conn = sqlite3.connect(db_path)
+c = conn.cursor()
+# create tables if not exist
+c.execute(schema_to_sql_create_if_not_exists("measurement", measurement_schema))
+c.execute(schema_to_sql_create_if_not_exists("navigation", navigation_schema))
+c.execute(schema_to_sql_create_if_not_exists("lcp", lcp_schema))
+c.execute(schema_to_sql_create_if_not_exists("fcp", fcp_schema))
+c.execute(schema_to_sql_create_if_not_exists("resources", resources_schema))
+conn.commit()
+
+
 
 
 def create_driver_with_default_options():
@@ -116,8 +243,8 @@ def create_driver_with_default_options():
     options.log.level = "trace"
     #driver_env = os.environ.copy()
     #driver_env["MOZ_LOG"] = "timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5"
-    #driver_env["MOZ_LOG_FILE"] = base_path+msm_id+"/firefox"
-    #driver_env["TMPDIR"] = base_path+msm_id+"/"
+    #driver_env["MOZ_LOG_FILE"] = base_path_defense+msm_id+"/firefox"
+    #driver_env["TMPDIR"] = base_path_defense+msm_id+"/"
     #options.binary_location="/home/fries/firefox/gecko-dev/obj-x86_64-pc-linux-gnu/dist/bin/firefox"
     options.binary_location="/home/fries/firefox-135.0.1/obj-ff-nightly/dist/bin/firefox"
     #driver_location = "/home/fries/firefox/geckodriver"
@@ -162,6 +289,15 @@ async_script_perf = """
 """
 
 def get_page_performance_metrics_and_write_logs(driver):
+    # technically this could just be a global variable
+    current_measurement = dict()
+    current_measurement['id'] = msm_id
+    current_measurement['shaping'] = "10Mbit 5Mbit 10ms 10ms"
+    current_measurement['service_uri'] = full_uri
+    current_measurement['defense'] = defence
+    current_measurement['error'] = ""
+    current_measurement['unfinished_defenses'] = -1
+    current_measurement['rough_timestamp'] = time.time()
     try:
         print(full_uri)
         #https://stackoverflow.com/questions/63699473/is-the-firefox-web-console-accessible-in-headless-mode/63708393#63708393
@@ -201,10 +337,45 @@ def get_page_performance_metrics_and_write_logs(driver):
         driver.get(full_uri)
         print(service_names[full_uri])
         perf = driver.execute_async_script(ASYNC_PERF_SCRIPT)
-        with open(log_dir+'perf.json', 'w') as file:
-            json.dump(perf, file)
+        #with open(log_dir+'perf.json', 'w') as file:
+        #    json.dump(perf, file)
+        if 'navigation' in perf:
+                navigation_data = perf['navigation']
+                navigation_data['service_uri'] = page
+                nav_sql, nav_values = create_insert_statement("navigation", navigation_schema, navigation_data)
+                c.execute(nav_sql, nav_values)
+                conn.commit()
+        if 'largestContentfulPaint' in perf:
+            lcp_data = perf['largestContentfulPaint']
+            # this is always a list but might only have one entry
+            # for LCP, we only store the last entry, since that is the latest LCP candidate
+            if isinstance(lcp_data, list) and len(lcp_data) > 0:
+                lcp_entry = lcp_data[-1]
+                lcp_entry['service_uri'] = page
+                lcp_sql, lcp_values = create_insert_statement("lcp", lcp_schema, lcp_entry)
+                c.execute(lcp_sql, lcp_values)
+                conn.commit()
+            else:
+                print(f"Largest Contentful Paint data is not a list or is empty for website {page}", file=sys.stderr)
+        if 'paint' in perf:
+            paint_data = perf['paint']
+            for paint_entry in paint_data:
+                if paint_entry.get('name', '') == 'first-contentful-paint':
+                    fcp_entry = paint_entry
+                    fcp_entry['service_uri'] = page
+                    fcp_sql, fcp_values = create_insert_statement("fcp", fcp_schema, fcp_entry)
+                    c.execute(fcp_sql, fcp_values)
+                    conn.commit()
+                    break
+        if 'resource' in perf:
+            resources_data = perf['resource']
+            for resource_entry in resources_data:
+                resource_entry['service_uri'] = page
+                res_sql, res_values = create_insert_statement("resources", resources_schema, resource_entry)
+                c.execute(res_sql, res_values)
+            conn.commit()
         driver.get_screenshot_as_file(log_dir+"replay.png")
-        return ""
+        return current_measurement
     except selenium.common.exceptions.WebDriverException as e:
         error_str = str(e)
         print(error_str)
@@ -213,14 +384,15 @@ def get_page_performance_metrics_and_write_logs(driver):
             error_str = "unknown error"
         with open(log_dir+"error.txt", 'w', encoding='utf-8') as f:
             f.write(error_str)
-        return error_str
+        current_measurement['error'] = error_str
+        return current_measurement
 
 
 def perform_page_load():
     driver = create_driver_with_default_options()
     # for now we set this really high because the defense implementation inflates PLTs by quite a bit...
     driver.set_page_load_timeout(60)
-    error = get_page_performance_metrics_and_write_logs(driver)
+    current_measurement = get_page_performance_metrics_and_write_logs(driver)
     log_file=log_dir+"firefox.moz_log"
     defense_state_dir = log_dir+"defense-state/"
     if defence in ["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] and os.path.exists(defense_state_dir):
@@ -243,7 +415,13 @@ def perform_page_load():
         #         pass
         
     driver.quit()
-    if error == "":
+    if defence in ["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] and os.path.exists(defense_state_dir):
+        unfinished_files = list(defense_state_dir.iterdir())
+        current_measurement['unfinished_defenses'] = len(unfinished_files)
+    msm_sql, msm_values = create_insert_statement("measurement", measurement_schema, current_measurement)
+    c.execute(msm_sql, msm_values)
+    conn.commit()
+    if current_measurement.get("error", "") == "":
         return 0
     else:
         return 1

@@ -13,6 +13,8 @@ fi
 # unidir for now implies FROM the entity that controls the defense
 # TODO: implement disabling connection reuse by using the root cert instead of a cert with SANs
 
+BASE_DIR="/data/website-fingerprinting/packet-captures/"
+
 function run_experiment_for_defense {
 	local DEFENSE=$1
 	echo $DEFENSE
@@ -21,7 +23,7 @@ function run_experiment_for_defense {
 	echo ${shortname}
 	# read /data/website-fingerprinting/webpage-replay/replay/$shortname/servers-and-hostnames.txt
 	IFS=';' read -ra SERVERS < /data/website-fingerprinting/webpage-replay/replay/${shortname}/servers-and-hostnames.txt
-	mkdir -p /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}
+	mkdir -p ${BASE_DIR}${DEFENSE}/${msmID}-${shortname}
 	
 	echo "10Mbit 5Mbit 10ms 10ms"
 	#setup shaping with number of servers
@@ -29,15 +31,15 @@ function run_experiment_for_defense {
 	./setup-shaping.sh CREATE 10Mbit 5Mbit 10ms 10ms "${#SERVERS[@]}"
 
 	#used by both client and quic-go server
-	export TRACE_CSV_DIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/
+	export TRACE_CSV_DIR=${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/
 
-	ip netns exec client-net tcpdump -i any -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/client.pcap 2> /tmp/tcpdump-client.log  &
+	ip netns exec client-net tcpdump -i any -w ${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/client.pcap 2> /tmp/tcpdump-client.log  &
 	tcpdumpclientPID=$!
-	ip netns exec bottleneck-net tcpdump -i any -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/middle.pcap 2> /tmp/tcpdump-middle.log &
+	ip netns exec bottleneck-net tcpdump -i any -w ${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/middle.pcap 2> /tmp/tcpdump-middle.log &
 	tcpdumpmiddlePID=$!
 	#tcpdumpserverPIDS=()
 	#for (( i=1; i<=${#SERVERS[@]}; i++ )); do
-	#	ip netns exec server-net tcpdump -i any -w "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$i.pcap" &
+	#	ip netns exec server-net tcpdump -i any -w "${BASE_DIR}$DEFENSE/${msmID}-${shortname}/server-$i.pcap" &
 	#	tcpdumpserverPIDS+=($!)
 	#done
 	# example usage of server: TRACE_CSV_DIR=./ ./h3-replay-server --dir /data/website-fingerprinting/webpage-replay/replay/${shortname} --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "$origins" --frontdefense
@@ -49,10 +51,10 @@ function run_experiment_for_defense {
 		IP_OF_HOST="10.237.0.$((i + 3))"
 		if [[ ${DEFENSE} == "undefended" || ${DEFENSE} == "front-client-controlled-bidir" || ${DEFENSE} == "front-client-controlled-unidir" || ${DEFENSE} == "testing" ]]; then
 			# no front defense, so we use the h3-replay-server
-			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
+			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/sslkey-server-$((i+1)).log" >> "${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
 		elif [[ ${DEFENSE} == "front-client-and-server-controlled-bidir" || ${DEFENSE} == "front-server-controlled-unidir" ]]; then
 			# front defense, so we use the neqo-bin server
-			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --frontdefense >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
+			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --frontdefense >> "${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
 		fi
 		sleep 1
 		#ip netns exec server-net ./h3-replay-server --dir /data/website-fingerprinting/webpage-replay/replay/${shortname} --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --frontdefense
@@ -66,13 +68,13 @@ function run_experiment_for_defense {
 	sleep 10
 	# hopefully enough to get all the servers started, they do have to read the certificates after all
 
-	export TMPDIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}
-	export SSLKEYLOGFILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey.log
+	export TMPDIR=${BASE_DIR}${DEFENSE}/${msmID}-${shortname}
+	export SSLKEYLOGFILE=${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/sslkey.log
 	export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5,neqo_http3::*:5
-	export MOZ_LOG_FILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/firefox
-	mkdir /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/
-	export DEFENSE_STATE_DIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/
-	ip netns exec client-net python3 "$PWD/measure-website-firefox.py" "${uri}" "${msmID}" "${DEFENSE}"
+	export MOZ_LOG_FILE=${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/firefox
+	mkdir ${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/defense-state/
+	export DEFENSE_STATE_DIR=${BASE_DIR}${DEFENSE}/${msmID}-${shortname}/defense-state/
+	ip netns exec client-net python3 "$PWD/measure-website-firefox.py" "${uri}" "${msmID}" "${DEFENSE}" "${BASE_DIR}"
 	#TODO: maybe use exit code of this script as success indicator
 	
 	kill -SIGINT $tcpdumpclientPID
@@ -123,6 +125,9 @@ elif [[ $iterations == "front-client-controlled-unidir" ]]; then
 else
 	#not sure what happens if you cannot interpret the iterations variable as a number
 	echo "Running $iterations iterations"
+	# TODO: somehow introduce a script or check here that can tell how many iterations have already been done and only do the remaining ones
+	# this will be specific for each website and each defense...
+	# so we will likely have to loop over the websites first and then do the iterations for each website and each defense
 	for ((i=1; i<=iterations; i++)); do
 	echo "Iteration $i"
 		while read uri; do
