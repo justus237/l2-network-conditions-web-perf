@@ -346,7 +346,7 @@ def get_page_performance_metrics_and_write_logs(driver):
                 navigation_data['service_uri'] = page
                 nav_sql, nav_values = create_insert_statement("navigation", navigation_schema, navigation_data)
                 c.execute(nav_sql, nav_values)
-                conn.commit()
+                #conn.commit()
         if 'largestContentfulPaint' in perf:
             lcp_data = perf['largestContentfulPaint']
             # this is always a list but might only have one entry
@@ -356,7 +356,7 @@ def get_page_performance_metrics_and_write_logs(driver):
                 lcp_entry['service_uri'] = page
                 lcp_sql, lcp_values = create_insert_statement("lcp", lcp_schema, lcp_entry)
                 c.execute(lcp_sql, lcp_values)
-                conn.commit()
+                #conn.commit()
             else:
                 print(f"Largest Contentful Paint data is not a list or is empty for website {page}", file=sys.stderr)
         if 'paint' in perf:
@@ -367,7 +367,7 @@ def get_page_performance_metrics_and_write_logs(driver):
                     fcp_entry['service_uri'] = page
                     fcp_sql, fcp_values = create_insert_statement("fcp", fcp_schema, fcp_entry)
                     c.execute(fcp_sql, fcp_values)
-                    conn.commit()
+                    #conn.commit()
                     break
         if 'resource' in perf:
             resources_data = perf['resource']
@@ -375,7 +375,7 @@ def get_page_performance_metrics_and_write_logs(driver):
                 resource_entry['service_uri'] = page
                 res_sql, res_values = create_insert_statement("resources", resources_schema, resource_entry)
                 c.execute(res_sql, res_values)
-            conn.commit()
+            #conn.commit()
         driver.get_screenshot_as_file(log_dir+"replay.png")
         return current_measurement
     except selenium.common.exceptions.WebDriverException as e:
