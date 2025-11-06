@@ -205,7 +205,7 @@ for defense_subdir in Path(base_path).iterdir():
                         # delete replay.png
                         replay_screenshot = measurement_dir / "replay.png"
                         if replay_screenshot.is_file():
-                            replay_screenshot.unlink()
+                            print(f"dangling replay.png found at {str(replay_screenshot)}")
                         with open(perf_file, "r") as pf:
                             try:
                                 perf_data = json.load(pf)
