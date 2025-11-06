@@ -202,6 +202,10 @@ for defense_subdir in Path(base_path).iterdir():
                         continue
                     # if perf.json exists, parse it and insert into navigation, lcp, fcp, resources tables
                     if perf_file.is_file():
+                        # delete replay.png
+                        replay_screenshot = measurement_dir / "replay.png"
+                        if replay_screenshot.is_file():
+                            replay_screenshot.unlink()
                         with open(perf_file, "r") as pf:
                             try:
                                 perf_data = json.load(pf)
