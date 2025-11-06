@@ -204,6 +204,11 @@ for defense_subdir in Path(base_path).iterdir():
                         msm_sql, msm_values = create_insert_statement("measurement", measurement_schema, current_measurement)
                         c.execute(msm_sql, msm_values)
                         conn.commit()
+                        # delete replay.png
+                        replay_screenshot = measurement_dir / "replay.png"
+                        if replay_screenshot.is_file():
+                            replay_screenshot.unlink()
+                            
                     else:
                         print(f"Skipping measurement {msmID} of website {full_uri} because neither error.txt nor perf.json exist", file=sys.stderr)
                         #print(f"Deleting measurement directory {measurement_dir} since it has no useful data", file=sys.stderr)
