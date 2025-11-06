@@ -199,6 +199,8 @@ for defense_subdir in Path(base_path).iterdir():
                         conn.commit()
                     else:
                         print(f"Skipping measurement {msmID} of website {full_uri} because neither error.txt nor perf.json exist", file=sys.stderr)
+                        #print(f"Deleting measurement directory {measurement_dir} since it has no useful data", file=sys.stderr)
+                        #measurement_dir.rmdir()
                         continue
                     # if perf.json exists, parse it and insert into navigation, lcp, fcp, resources tables
                     if perf_file.is_file():
