@@ -192,6 +192,13 @@ for defense_subdir in Path(base_path).iterdir():
 
                     # the web performance results are in measurement_dir/perf.json
                     perf_file = measurement_dir / "perf.json"
+
+                    #look at size of pcap file to see whether we can actually do anything with this measurement
+                    pcap_file = measurement_dir / "middle.pcap"
+                    if not pcap_file.is_file() or pcap_file.stat().st_size == 0:
+                        print(f"Pcap file {str(pcap_file)} is missing or empty, skipping measurement {msmID} of website {full_uri}", file=sys.stderr)
+                        continue
+
                     # insert into measurement table only if either error.txt or perf.json exist
                     if error_file.is_file() or perf_file.is_file():
                         msm_sql, msm_values = create_insert_statement("measurement", measurement_schema, current_measurement)
