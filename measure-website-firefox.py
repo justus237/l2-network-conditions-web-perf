@@ -75,6 +75,8 @@ def create_driver_with_default_options():
     profile.set_preference('network.captive-portal-service.enabled', False)
     profile.set_preference('network.connectivity-service.enabled', False)
     
+    profile.set_preference('devtools.chrome.enabled', True)
+
     profile.set_preference('services.settings.server', 'http://localhost')
 
     profile.set_preference('browser.cache.disk.enable', False)

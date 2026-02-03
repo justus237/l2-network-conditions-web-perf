@@ -31,9 +31,9 @@ function run_experiment_for_defense {
 	#used by both client and quic-go server
 	export TRACE_CSV_DIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/
 
-	ip netns exec client-net tcpdump -i any -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/client.pcap 2> /tmp/tcpdump-client.log  &
+	ip netns exec client-net tcpdump -i veth0 -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/client.pcap 2> /tmp/tcpdump-client.log  &
 	tcpdumpclientPID=$!
-	ip netns exec bottleneck-net tcpdump -i any -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/middle.pcap 2> /tmp/tcpdump-middle.log &
+	ip netns exec bottleneck-net tcpdump -i veth0 -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/middle.pcap 2> /tmp/tcpdump-middle.log &
 	tcpdumpmiddlePID=$!
 	#tcpdumpserverPIDS=()
 	#for (( i=1; i<=${#SERVERS[@]}; i++ )); do

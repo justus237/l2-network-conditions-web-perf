@@ -496,6 +496,8 @@ function setup_arp {
 #for all veth pairs and bridges: create -> set ip addresses/assign veth ends to bridge -> set up
 
 function create {
+  # TODO: refactor this function to do all the checks for NAT vs server-mode only once and invoke different functions, requires entangling the functions
+
   #check if we already set up an experiment and forgot to run destroy
   source "/tmp/VARS"
   if [[ "$SETUP_ID" ]]; then
