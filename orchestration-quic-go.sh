@@ -33,7 +33,7 @@ function run_experiment_for_defense {
 
 	ip netns exec client-net tcpdump -i veth0 -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/client.pcap 2> /tmp/tcpdump-client.log  &
 	tcpdumpclientPID=$!
-	ip netns exec bottleneck-net tcpdump -i veth0 -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/middle.pcap 2> /tmp/tcpdump-middle.log &
+	ip netns exec bottleneck-net tcpdump -i br-client-inet -w /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/middle.pcap 2> /tmp/tcpdump-middle.log &
 	tcpdumpmiddlePID=$!
 	#tcpdumpserverPIDS=()
 	#for (( i=1; i<=${#SERVERS[@]}; i++ )); do
