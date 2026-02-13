@@ -194,7 +194,7 @@ for defense_subdir in Path(base_path).iterdir():
                     perf_file = measurement_dir / "perf.json"
 
                     #look at size of pcap file to see whether we can actually do anything with this measurement
-                    pcap_file = measurement_dir / "middle.pcap"
+                    pcap_file = measurement_dir / "client.pcap"
                     if not pcap_file.is_file() or pcap_file.stat().st_size == 0:
                         print(f"Pcap file {str(pcap_file)} is missing or empty, skipping measurement {msmID} of website {full_uri}", file=sys.stderr)
                         continue
