@@ -22,6 +22,14 @@ function run_experiment_for_defense {
 	# read /data/website-fingerprinting/webpage-replay/replay/$shortname/servers-and-hostnames.txt
 	IFS=';' read -ra SERVERS < /data/website-fingerprinting/webpage-replay/replay/${shortname}/servers-and-hostnames.txt
 	mkdir -p /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}
+
+	READY_FIFO="/tmp/servers_ready_${msmID}-${shortname}"
+	if [[ -p $READY_FIFO ]]; then
+		echo "${READY_FIFO} already exists, this should not happen"
+		rm "$READY_FIFO"
+	fi
+	mkfifo "$READY_FIFO"
+	exec 3<>"$READY_FIFO"
 	
 	echo "10Mbit 5Mbit 10ms 10ms"
 	#setup shaping with number of servers
@@ -49,12 +57,12 @@ function run_experiment_for_defense {
 		IP_OF_HOST="10.237.0.$((i + 3))"
 		if [[ ${DEFENSE} == "undefended" || ${DEFENSE} == "front-client-controlled-bidir" || ${DEFENSE} == "front-client-controlled-unidir" || ${DEFENSE} == "testing" ]]; then
 			# no front defense, so we use the h3-replay-server
-			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
+			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --fifoPipe "$READY_FIFO" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
 		elif [[ ${DEFENSE} == "front-client-and-server-controlled-bidir" || ${DEFENSE} == "front-server-controlled-unidir" ]]; then
 			# front defense, so we use the neqo-bin server
-			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --frontdefense >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
+			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --frontdefense --fifoPipe "$READY_FIFO" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
 		fi
-		sleep 1
+		#sleep 1
 		#ip netns exec server-net ./h3-replay-server --dir /data/website-fingerprinting/webpage-replay/replay/${shortname} --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --frontdefense
 	done
 
@@ -63,8 +71,12 @@ function run_experiment_for_defense {
 	#socat TCP-LISTEN:6010,fork,reuseaddr,bind=192.168.0.2 TCP:127.0.0.1:6010 2>/dev/null &
 	# wait for everything to run; could be cleaner
 	#running HTTP/3 replay server
-	sleep 10
+	#sleep 10
+	read -n ${#SERVERS[@]} -u 3
 	# hopefully enough to get all the servers started, they do have to read the certificates after all
+	exec 3<>&-
+	rm "$READY_FIFO"
+	echo "all servers ready"
 
 	export TMPDIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}
 	export SSLKEYLOGFILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey.log
