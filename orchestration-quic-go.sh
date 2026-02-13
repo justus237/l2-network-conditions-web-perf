@@ -74,7 +74,7 @@ function run_experiment_for_defense {
 	#sleep 10
 	read -n ${#SERVERS[@]} -u 3
 	# hopefully enough to get all the servers started, they do have to read the certificates after all
-	exec 3<>&-
+	exec 3>&- 3<&-
 	rm "$READY_FIFO"
 	echo "all servers ready"
 
