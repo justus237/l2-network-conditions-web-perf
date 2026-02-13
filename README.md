@@ -4,3 +4,6 @@
 - see how well shaping works with `testing-dl-ul-rtt-with-iperf-and-irtt`
 - `orchestation.sh` is the script for running experiments, requires some `.txt` files as input
 - the main web performance scripts are `selenium-measure-website.py` and `lighthouse-navigation-and-paint-timings-run.js`; they both output to web-performance.db but their schemas are not compatible, so only use one of the two
+- `orchestration-quic-go.sh` is the main measurement script for now; it calls `measure-website-firefox.py`
+- after a measurement run, the scripts `count-samples-and-extract-web-perf.py` and `delete-measurements-with-unknown-result.py` need to be run, in order to generate a database and remove all measurements where no result (not even an error) was written to the disk
+
