@@ -12,9 +12,21 @@ fi
 #["front-client-and-server-controlled-bidir", "front-server-controlled-unidir"] -> uses quic-go
 # unidir for now implies FROM the entity that controls the defense
 # TODO: implement disabling connection reuse by using the root cert instead of a cert with SANs
+DEFAULT_SHAPING="10Mbit 5Mbit 10ms 10ms"
+if [[ -f "shapings.txt" ]]; then
+	mapfile -t SHAPINGS < "shapings.txt"
+fi
+if [[ ${#SHAPINGS[@]} -eq 0 ]]; then
+	echo "shapings.txt not found or empty — using default: $DEFAULT_SHAPING"
+	SHAPINGS=("$DEFAULT_SHAPING")
+else
+	echo "Loaded ${#SHAPINGS[@]} shaping(s) from shapings.txt:"
+	for s in "${SHAPINGS[@]}"; do echo "  $s"; done
+fi
 
 function run_experiment_for_defense {
 	local DEFENSE=$1
+	local SHAPING=$2
 	echo $DEFENSE
 	msmID=$(uuidgen)
 	shortname=$(python3 /home/fries/website-fingerprinting/website-fingerprinting-measurement/get_service_name.py "${uri}")
@@ -31,10 +43,11 @@ function run_experiment_for_defense {
 	mkfifo "$READY_FIFO"
 	exec 3<>"$READY_FIFO"
 	
-	echo "10Mbit 5Mbit 10ms 10ms"
+	#shaping="10Mbit 5Mbit 10ms 10ms"
+	echo "${SHAPING}" > /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/shaping.txt
 	#setup shaping with number of servers
 	# TODO: capture the return code of setup-shaping and if it is not 0, call delete and exit with error
-	./setup-shaping.sh CREATE 10Mbit 5Mbit 10ms 10ms "${#SERVERS[@]}"
+	./setup-shaping.sh CREATE ${SHAPING} "${#SERVERS[@]}"
 
 	#used by both client and quic-go server
 	export TRACE_CSV_DIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/
@@ -139,14 +152,17 @@ else
 	#not sure what happens if you cannot interpret the iterations variable as a number
 	echo "Running $iterations iterations"
 	for ((i=1; i<=iterations; i++)); do
-	echo "Iteration $i"
+		#echo "Iteration $i"
+		shaping_index=$(( (i - 1) % ${#SHAPINGS[@]} ))
+		SHAPING_ITER="${SHAPINGS[$shaping_index]}"
+		echo "Iteration $i — using shaping: $SHAPING_ITER"
 		while read uri; do
 			echo ${uri}
 			#run_experiment_for_defense "undefended"
 			#run_experiment_for_defense "front-client-controlled-bidir"
 			#run_experiment_for_defense "front-client-controlled-unidir"
-			run_experiment_for_defense "front-client-and-server-controlled-bidir"
-			run_experiment_for_defense "front-qcsd-client-and-server-controlled-bidir"
+			run_experiment_for_defense "front-client-and-server-controlled-bidir" "${SHAPING_ITER}"
+			run_experiment_for_defense "front-qcsd-client-and-server-controlled-bidir" "${SHAPING_ITER}"
 		done < websites.txt
 	done
 fi
