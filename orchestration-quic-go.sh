@@ -122,31 +122,31 @@ if [[ $iterations == "testing" ]]; then
 	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
-		run_experiment_for_defense "testing"
+		run_experiment_for_defense "testing" "${DEFAULT_SHAPING}"
 	done < websites.txt
 elif [[ $iterations == "front-client-controlled-bidir" ]]; then
 	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
-		run_experiment_for_defense "front-client-controlled-bidir"
+		run_experiment_for_defense "front-client-controlled-bidir" "${DEFAULT_SHAPING}"
 	done < websites.txt
 elif [[ $iterations == "front-client-and-server-controlled-bidir" ]]; then
 	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
-		run_experiment_for_defense "front-client-and-server-controlled-bidir"
+		run_experiment_for_defense "front-client-and-server-controlled-bidir" "${DEFAULT_SHAPING}"
 	done < websites.txt
 elif [[ $iterations == "front-server-controlled-unidir" ]]; then
 	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
-		run_experiment_for_defense "front-server-controlled-unidir"
+		run_experiment_for_defense "front-server-controlled-unidir" "${DEFAULT_SHAPING}"
 	done < websites.txt
 elif [[ $iterations == "front-client-controlled-unidir" ]]; then
 	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
-		run_experiment_for_defense "front-client-controlled-unidir"
+		run_experiment_for_defense "front-client-controlled-unidir" "${DEFAULT_SHAPING}"
 	done < websites.txt
 else
 	#not sure what happens if you cannot interpret the iterations variable as a number
