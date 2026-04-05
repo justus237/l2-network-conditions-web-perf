@@ -123,7 +123,7 @@ def create_driver_with_default_options():
     #options.binary_location="/home/fries/firefox/gecko-dev/obj-x86_64-pc-linux-gnu/dist/bin/firefox"
     options.binary_location="/home/fries/firefox-149.0/obj-ff-nightly/dist/bin/firefox"
     #driver_location = "/home/fries/firefox/geckodriver"
-    driver_location = "/home/fries/firefox-149.0/target/release/geckodriver"
+    driver_location = "/home/fries/firefox-149.0/obj-ff-nightly/dist/host/bin/geckodriver"
     #, env=driver_env, log_output=log_dir+"geckodriver.log"
     return webdriver.Firefox(service=Service(driver_location), options=options)
 
