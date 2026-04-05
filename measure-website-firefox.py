@@ -224,14 +224,14 @@ def perform_page_load():
     error = get_page_performance_metrics_and_write_logs(driver)
     log_file=log_dir+"firefox.moz_log"
     defense_state_dir = log_dir+"defense-state/"
-    if defence in ["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] and os.path.exists(defense_state_dir):
-        # wait until the directory "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/" is empty or 15 seconds have passed
-        for i in range(3):
-            if len(os.listdir(defense_state_dir)) > 0:
-                print("waiting for defense to finish for 5 seconds")
-                time.sleep(5)
-            else:
-                break
+    #if defence in ["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] and os.path.exists(defense_state_dir):
+    #    # wait until the directory "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/" is empty or 15 seconds have passed
+    #    for i in range(3):
+    #        if len(os.listdir(defense_state_dir)) > 0:
+    #            print("waiting for defense to finish for 5 seconds")
+    #            time.sleep(5)
+    #        else:
+    #            break
         # while True:
         #     try:
         #         with open(log_file, 'r') as f:
