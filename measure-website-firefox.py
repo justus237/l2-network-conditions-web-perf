@@ -60,6 +60,7 @@ def create_driver_with_default_options():
     options.add_argument("--headless")
     options.add_argument("--width=1600")
     options.add_argument("--height=1200")
+    options.add_argument("-remote-allow-system-access")
     
     profile = FirefoxProfile()
     # https://support.mozilla.org/en-US/kb/how-stop-firefox-making-automatic-connections
