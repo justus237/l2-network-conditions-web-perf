@@ -60,6 +60,9 @@ function run_experiment_for_defense {
 			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --fifoPipe "$READY_FIFO" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
 		elif [[ ${DEFENSE} == "front-client-and-server-controlled-bidir" || ${DEFENSE} == "front-server-controlled-unidir" ]]; then
 			# front defense, so we use the neqo-bin server
+			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --frontdefenseslidingwindow --fifoPipe "$READY_FIFO" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
+		elif [[ ${DEFENSE} == "front-qcsd-client-and-server-controlled-bidir" || ${DEFENSE} == "front-server-controlled-unidir" ]]; then
+			# front defense, so we use the neqo-bin server
 			ip netns exec server-net-$((i+1)) ./h3-replay-server --dir "/data/website-fingerprinting/webpage-replay/replay/${shortname}/" --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "${SERVERS[$i]}" --sslKeyLogFile "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey-server-$((i+1)).log" --frontdefense --fifoPipe "$READY_FIFO" >> "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/server-$((i+1)).log" 2>&1 &
 		fi
 		#sleep 1
@@ -139,10 +142,11 @@ else
 	echo "Iteration $i"
 		while read uri; do
 			echo ${uri}
-			run_experiment_for_defense "undefended"
-			run_experiment_for_defense "front-client-controlled-bidir"
-			run_experiment_for_defense "front-client-controlled-unidir"
+			#run_experiment_for_defense "undefended"
+			#run_experiment_for_defense "front-client-controlled-bidir"
+			#run_experiment_for_defense "front-client-controlled-unidir"
 			run_experiment_for_defense "front-client-and-server-controlled-bidir"
+			run_experiment_for_defense "front-qcsd-client-and-server-controlled-bidir"
 		done < websites.txt
 	done
 fi

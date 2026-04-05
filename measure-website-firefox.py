@@ -100,7 +100,7 @@ def create_driver_with_default_options():
     profile.set_preference('network.trr.mode', 5)
     # !!! this one should be the only preference  we need !!!
     profile.set_preference('network.http.http3.force-quic-on-all-connections', True)
-    if defence in ["front-client-controlled-bidir"]:
+    if defence in ["front-qcsd-client-and-server-controlled-bidir"]:
         use_defence = 1
         #defence_seed = random.getrandbits(32)
     elif defence in ["front-client-and-server-controlled-bidir", "front-client-controlled-unidir"]:
@@ -121,9 +121,9 @@ def create_driver_with_default_options():
     #driver_env["MOZ_LOG_FILE"] = base_path+msm_id+"/firefox"
     #driver_env["TMPDIR"] = base_path+msm_id+"/"
     #options.binary_location="/home/fries/firefox/gecko-dev/obj-x86_64-pc-linux-gnu/dist/bin/firefox"
-    options.binary_location="/home/fries/firefox-135.0.1/obj-ff-nightly/dist/bin/firefox"
+    options.binary_location="/home/fries/firefox-149.0/obj-ff-nightly/dist/bin/firefox"
     #driver_location = "/home/fries/firefox/geckodriver"
-    driver_location = "/home/fries/firefox-135.0.1/target/release/geckodriver"
+    driver_location = "/home/fries/firefox-149.0/target/release/geckodriver"
     #, env=driver_env, log_output=log_dir+"geckodriver.log"
     return webdriver.Firefox(service=Service(driver_location), options=options)
 
@@ -177,9 +177,7 @@ def get_page_performance_metrics_and_write_logs(driver):
         # from https://bugzilla.mozilla.org/show_bug.cgi?id=1523367#c13
         # another way of doing this is using bubblewrap to override using mount namespaces
         # dns_script = '''
-        #const gOverride = Cc["@mozilla.org/network/native-dns-override;1"].getService(
-        #  Ci.nsINativeDNSResolverOverride
-        #);
+        #const gOverride = Cc["@mozilla.org/network/native-dns-override;1"].getService(Ci.nsINativeDNSResolverOverride);
         #gOverride.addIPOverride("example.com", "1.1.1.1");
         #gOverride.addIPOverride("example.org", "::1:2:3");
         #gOverride.addIPOverride("example.net", "N/A"); // NO IPs

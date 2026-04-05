@@ -451,6 +451,7 @@ function setup_iptables {
 
 
 function setup_arp {
+  # [TODO]: arp may be invalidated after some time or on link down; need to figure out if this could be a problem
   if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
     # disable automatic ARP discovery first and then set up ARP manually
     ip -netns "$CLIENT_NS" link set veth0 arp off
