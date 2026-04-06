@@ -13,9 +13,9 @@ def remove_suffix(input_string, suffix):
 def calculate_buffer(bandwidth, delay1, delay2):
 	#rtt = delay1+delay2
 	if bandwidth.endswith("Mbit"):
-		bandwidth = int(remove_suffix(bandwidth, "Mbit"))
-		delay1 = int(remove_suffix(delay1, "ms"))
-		delay2 = int(remove_suffix(delay2, "ms"))
+		bandwidth = int(float(remove_suffix(bandwidth, "Mbit")))
+		delay1 = int(float(remove_suffix(delay1, "ms")))
+		delay2 = int(float(remove_suffix(delay2, "ms")))
 		rtt = delay1+delay2
 		buffer_bytes = int(rtt * bandwidth * 1000 / 8)
 		if buffer_bytes < 3000:
@@ -23,9 +23,9 @@ def calculate_buffer(bandwidth, delay1, delay2):
 		else:
 			print(buffer_bytes)
 	elif bandwidth.endswith("kbit"):
-		bandwidth = int(remove_suffix(bandwidth, "kbit"))
-		delay1 = int(remove_suffix(delay1, "ms"))
-		delay2 = int(remove_suffix(delay2, "ms"))
+		bandwidth = int(float(remove_suffix(bandwidth, "kbit")))
+		delay1 = int(float(remove_suffix(delay1, "ms")))
+		delay2 = int(float(remove_suffix(delay2, "ms")))
 		rtt = delay1+delay2
 		buffer_bytes = int(rtt * bandwidth / 8)
 		if buffer_bytes < 3000:

@@ -13,14 +13,14 @@ def remove_suffix(input_string, suffix):
 def calculate_burst(bandwidth):
 	if bandwidth.endswith("Mbit"):
 		bandwidth = remove_suffix(bandwidth, "Mbit")
-		burst = int(int(bandwidth) * 1000000/2000)
+		burst = int(int(float(bandwidth)) * 1000000/2000)
 		if burst < 3000:
 			print("3000")
 		else:
 			print(burst)
 	elif bandwidth.endswith("kbit"):
 		bandwidth = remove_suffix(bandwidth, "kbit")
-		burst = int(int(bandwidth) * 1000/2000)
+		burst = int(int(float(bandwidth)) * 1000/2000)
 		if burst < 3000:
 			print("3000")
 		else:
