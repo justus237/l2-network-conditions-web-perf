@@ -116,7 +116,7 @@ def create_driver_with_default_options():
     options.profile = profile
     #https://developer.mozilla.org/en-US/docs/Web/WebDriver/Capabilities/firefoxOptions#log_object
     #Available levels are trace, debug, config, info, warn, error, and fatal. If left undefined the default is info.
-    options.log.level = "trace"
+    #options.log.level = "trace"
     #driver_env = os.environ.copy()
     #driver_env["MOZ_LOG"] = "timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5"
     #driver_env["MOZ_LOG_FILE"] = base_path+msm_id+"/firefox"
@@ -222,8 +222,8 @@ def perform_page_load():
     # for now we set this really high because the defense implementation inflates PLTs by quite a bit...
     driver.set_page_load_timeout(30)
     error = get_page_performance_metrics_and_write_logs(driver)
-    log_file=log_dir+"firefox.moz_log"
-    defense_state_dir = log_dir+"defense-state/"
+    #log_file=log_dir+"firefox.moz_log"
+    #defense_state_dir = log_dir+"defense-state/"
     #if defence in ["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] and os.path.exists(defense_state_dir):
     #    # wait until the directory "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/" is empty or 15 seconds have passed
     #    for i in range(3):

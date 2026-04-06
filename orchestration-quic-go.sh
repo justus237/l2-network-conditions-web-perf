@@ -64,7 +64,7 @@ function run_experiment_for_defense {
 	# example usage of server: TRACE_CSV_DIR=./ ./h3-replay-server --dir /data/website-fingerprinting/webpage-replay/replay/${shortname} --hostAndPort "${IP_OF_HOST}:443" --multihost --origins "$origins" --frontdefense
 	# the ip address of the host is determined by its position in the servers array
 
-	export QUIC_GO_LOG_LEVEL=DEBUG
+	#export QUIC_GO_LOG_LEVEL=DEBUG
 	for (( i=0; i<${#SERVERS[@]}; i++ )); do
 		# see setup-shaping.sh for the IP address calculation
 		IP_OF_HOST="10.237.0.$((i + 3))"
@@ -96,8 +96,8 @@ function run_experiment_for_defense {
 
 	export TMPDIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}
 	export SSLKEYLOGFILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/sslkey.log
-	export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5,neqo_http3::*:5
-	export MOZ_LOG_FILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/firefox
+	#export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5,neqo_http3::*:5
+	#export MOZ_LOG_FILE=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/firefox
 	mkdir /data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/
 	export DEFENSE_STATE_DIR=/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/
 	ip netns exec client-net python3 "$PWD/measure-website-firefox.py" "${uri}" "${msmID}" "${DEFENSE}"

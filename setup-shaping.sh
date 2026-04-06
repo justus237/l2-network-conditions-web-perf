@@ -201,8 +201,8 @@ function setup_mirrored_ifaces {
     echo "Setting up mirrored interfaces for multiple server namespaces."
     # iterate over all server namespaces and set up a mirrored interface for each of them
     for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
-      echo "Setting up mirrored interface for server namespace ${i} (${SERVER_NS[$i]})."
-      echo "veth$((i + 1)) will be mirrored to ifb$((i + 1))."
+      #echo "Setting up mirrored interface for server namespace ${i} (${SERVER_NS[$i]})."
+      #echo "veth$((i + 1)) will be mirrored to ifb$((i + 1))."
       ip link add dev ifb$((i + 1)) netns "${BOTTLENECK_NS}" type ifb
       ip -netns "${BOTTLENECK_NS}" link set ifb$((i + 1)) up
       ip -netns "${BOTTLENECK_NS}" link set dev ifb$((i + 1)) gso_max_segs 1
