@@ -220,7 +220,7 @@ def get_page_performance_metrics_and_write_logs(driver):
 def perform_page_load():
     driver = create_driver_with_default_options()
     # for now we set this really high because the defense implementation inflates PLTs by quite a bit...
-    driver.set_page_load_timeout(60)
+    driver.set_page_load_timeout(30)
     error = get_page_performance_metrics_and_write_logs(driver)
     log_file=log_dir+"firefox.moz_log"
     defense_state_dir = log_dir+"defense-state/"
