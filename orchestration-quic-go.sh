@@ -27,6 +27,7 @@ fi
 function run_experiment_for_defense {
 	local DEFENSE=$1
 	local SHAPING=$2
+	local i
 	echo $DEFENSE
 	msmID=$(uuidgen)
 	shortname=$(python3 /home/fries/website-fingerprinting/website-fingerprinting-measurement/get_service_name.py "${uri}")
