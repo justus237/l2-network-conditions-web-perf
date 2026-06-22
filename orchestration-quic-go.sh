@@ -159,7 +159,7 @@ else
 		echo "Iteration $i — using shaping: $SHAPING_ITER"
 		while read uri; do
 			echo ${uri}
-			#run_experiment_for_defense "undefended"
+			#run_experiment_for_defense "undefended" "${SHAPING_ITER}"
 			#run_experiment_for_defense "front-client-controlled-bidir"
 			#run_experiment_for_defense "front-client-controlled-unidir"
 			#run_experiment_for_defense "front-client-and-server-controlled-bidir" "${SHAPING_ITER}"
