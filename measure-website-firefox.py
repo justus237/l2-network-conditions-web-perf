@@ -22,6 +22,10 @@ page = str(sys.argv[1])
 print(page)
 msm_id = str(sys.argv[2])
 defence = str(sys.argv[3])
+# optional 4th argument: the single-server orchestration runs one server for all
+# origins and passes its IP here. When set, every hostname resolves to this one
+# IP instead of the per-server "10.237.0.{i+3}" addresses of the multi-server setup.
+single_server_ip = str(sys.argv[4]) if len(sys.argv) > 4 else ""
 base_path = "/data/website-fingerprinting/packet-captures/"+defence+"/"
 
 
@@ -192,7 +196,7 @@ def get_page_performance_metrics_and_write_logs(driver):
         dns_override_script = '''const gOverride = Cc["@mozilla.org/network/native-dns-override;1"].getService(Ci.nsINativeDNSResolverOverride);
         '''
         for i, server in enumerate(servers):
-            ip_address = "10.237.0." + str(i + 3)
+            ip_address = single_server_ip if single_server_ip else "10.237.0." + str(i + 3)
             hostnames = server.split(",")
             for hostname in hostnames:
                 dns_override_script += f'gOverride.addIPOverride("{hostname}", "{ip_address}");\n'
@@ -223,15 +227,17 @@ def perform_page_load():
     driver.set_page_load_timeout(60)
     error = get_page_performance_metrics_and_write_logs(driver)
     #log_file=log_dir+"firefox.moz_log"
-    #defense_state_dir = log_dir+"defense-state/"
+    # [TODO]: read these from the os env
+    defense_client_state_dir = log_dir+"defense-client-state/"
+    defense_server_state_dir = log_dir+"defense-server-state/"
     #if defence in ["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] and os.path.exists(defense_state_dir):
     #    # wait until the directory "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/" is empty or 15 seconds have passed
-    #    for i in range(3):
-    #        if len(os.listdir(defense_state_dir)) > 0:
-    #            print("waiting for defense to finish for 5 seconds")
-    #            time.sleep(5)
-    #        else:
-    #            break
+    for i in range(3):
+        if len(os.listdir(defense_client_state_dir)) > 0 and len(os.listdir(defense_server_state_dir)) > 0:
+            print("waiting for defense to finish for 5 seconds")
+            time.sleep(5)
+        else:
+            break
         # while True:
         #     try:
         #         with open(log_file, 'r') as f:
