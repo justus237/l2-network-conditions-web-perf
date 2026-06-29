@@ -50,6 +50,7 @@ EXPERIMENTS=(
 	"front-client-and-server-controlled-bidir"
 	"front-client-and-server-controlled-bidir-first-conn"
 	"front-client-and-server-controlled-bidir-single-conn"
+	"front-client-and-server-controlled-bidir-first-conn-single-conn"
 	"front-client-and-server-controlled-bidir-exit-on-load"
 	"front-client-and-server-controlled-bidir-qcsd-exit-on-load"
 	"undefended"
@@ -190,7 +191,7 @@ function run_experiment_for_defense {
 
 	export TMPDIR="${RESULT_DIR}"
 	export SSLKEYLOGFILE="${RESULT_DIR}/sslkey.log"
-	#export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5,neqo_http3::*:5
+	#export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_glue::*:5,neqo_http3::*:5
 	export MOZ_LOG=neqo_transport::*:5
 	export MOZ_LOG_FILE=${RESULT_DIR}/firefox
 	mkdir "${RESULT_DIR}/defense-client-state/"
