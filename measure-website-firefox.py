@@ -122,7 +122,19 @@ def create_driver_with_default_options():
     profile.set_preference('network.dns.forceResolve', '')
     profile.set_preference('network.dns.disableIPv6', True)
 
-    profile.set_preference('network.http.http3.alt-svc-mapping-for-testing', '*;h3=":443"')
+    if ff_build == "moz":
+        # use servers_and_hostnames to override the alt-svc mapping for testing, so that we can force QUIC on all connections
+        alt_svc_mapping = []
+        with open("/data/website-fingerprinting/webpage-replay/replay/"+service_names[full_uri]+"/servers-and-hostnames.txt", "r") as f:
+            servers_and_hostnames = f.readline()
+        servers = servers_and_hostnames.split(";")
+        for server in servers:
+            hostnames = server.split(",")
+            for hostname in hostnames:
+                alt_svc_mapping.append(hostname + ';h3=":443"')
+        profile.set_preference('network.http.http3.alt-svc-mapping-for-testing', ",".join(alt_svc_mapping))
+    else: #we have a custom patch to just force quic :)
+        profile.set_preference('network.http.http3.alt-svc-mapping-for-testing', '*;h3=":443"')
     #from network_bench.py
     profile.set_preference('network.http.http3.force-use-alt-svc-mapping-for-testing', True)
     profile.set_preference('network.http.http3.disable_when_third_party_roots_found', False)
