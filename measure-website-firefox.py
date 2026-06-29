@@ -51,7 +51,7 @@ base_path = "/data/website-fingerprinting/packet-captures/"+experiment+"/"
 
 # only the Firefox binary differs between builds; the same geckodriver drives both
 if ff_build == "moz":
-    ff_binary = "/usr/bin/firefox"
+    ff_binary = "/home/fries/firefox/149.0-from-deb/usr/bin/firefox"
 else:
     ff_binary = "/home/fries/firefox-149.0/obj-ff-nightly/dist/bin/firefox"
 
