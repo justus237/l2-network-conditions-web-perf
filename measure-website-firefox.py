@@ -233,7 +233,7 @@ def perform_page_load():
             client_busy = bool(defense_client_state_dir) and os.path.isdir(defense_client_state_dir) and len(os.listdir(defense_client_state_dir)) > 0
             server_busy = bool(defense_server_state_dir) and os.path.isdir(defense_server_state_dir) and len(os.listdir(defense_server_state_dir)) > 0
             if client_busy or server_busy:
-                print("waiting for defense to finish for 5 seconds")
+                print("[" + experiment + "]" + "waiting for defense to finish for 5 seconds: "+(",".join(os.listdir(defense_client_state_dir)) if client_busy else "") + (" and " if client_busy and server_busy else "") + (",".join(os.listdir(defense_server_state_dir)) if server_busy else ""))
                 time.sleep(5)
             else:
                 break
