@@ -18,15 +18,42 @@ from urllib.parse import urlparse
 import os
 import random
 
+if len(sys.argv) < 4:
+    print("Usage: python3 measure-website-firefox.py <page> <msm_id> <experiment> [<front-counter-mode>::default=sliding] [<server_instances>::default=multi] [<exit-on-load>::default=false] [<ff-build>::default=mine] [<front-once-per-run>::default=false]")
+    sys.exit(1)
 page = str(sys.argv[1])
 print(page)
 msm_id = str(sys.argv[2])
-defence = str(sys.argv[3])
-# optional 4th argument: the single-server orchestration runs one server for all
-# origins and passes its IP here. When set, every hostname resolves to this one
-# IP instead of the per-server "10.237.0.{i+3}" addresses of the multi-server setup.
-single_server_ip = str(sys.argv[4]) if len(sys.argv) > 4 else ""
-base_path = "/data/website-fingerprinting/packet-captures/"+defence+"/"
+# experiment label: decides the output directory
+experiment = str(sys.argv[3]) #if len(sys.argv) > 3 else defence
+
+front_counter_mode = str(sys.argv[4]) if len(sys.argv) > 4 else "sliding"
+
+server_instances = str(sys.argv[5]) if len(sys.argv) > 5 else "multi"
+
+# "true" -> quit right after page load; otherwise wait for the defense to finish.
+exit_on_load = (str(sys.argv[6]).lower() == "true") if len(sys.argv) > 6 else False
+
+# which Firefox build to drive: "moz" -> distro/.deb build, otherwise my build.
+ff_build = str(sys.argv[7]) if len(sys.argv) > 7 else "mine"
+
+# client-side "single FRONT defense per measurement" (the analog of the server's
+# FRONT_DEFENSE_CLAIM_FILE); true only for the first-connection qcsd experiment.
+# hack: if qcsd is set we also set it to true
+front_single_per_run = (str(sys.argv[8]).lower() == "true") if len(sys.argv) > 8 else False
+if front_counter_mode == "qcsd":
+    front_single_per_run = True
+
+
+base_path = "/data/website-fingerprinting/packet-captures/"+experiment+"/"
+
+
+
+# only the Firefox binary differs between builds; the same geckodriver drives both
+if ff_build == "moz":
+    ff_binary = "/usr/bin/firefox"
+else:
+    ff_binary = "/home/fries/firefox-149.0/obj-ff-nightly/dist/bin/firefox"
 
 
 service_names = {}
@@ -105,15 +132,19 @@ def create_driver_with_default_options():
     profile.set_preference('network.trr.mode', 5)
     # !!! this one should be the only preference  we need !!!
     profile.set_preference('network.http.http3.force-quic-on-all-connections', True)
-    if defence in ["front-qcsd-client-and-server-controlled-bidir"]:
-        use_defence = 1
-        #defence_seed = random.getrandbits(32)
-    elif defence in ["front-client-and-server-controlled-bidir", "front-client-controlled-unidir"]:
-        use_defence = 2
+    defense_mode = 0
+    if "front-client-and-server-controlled-bidir" in experiment or "front-client-controlled-unidir" in experiment:
+        if front_counter_mode == "qcsd":
+            defense_mode = 1
+        else:   
+            defense_mode = 2
     else:
-        use_defence = 0
+        defense_mode = 0
         #defence_seed = 0
-    profile.set_preference('network.http.http3.defense', use_defence)
+    profile.set_preference('network.http.http3.defense.mode', defense_mode)
+    # client-side single FRONT defense per measurement (analog of the server's
+    # FRONT_DEFENSE_CLAIM_FILE); enabled only for the first-connection qcsd run
+    profile.set_preference('network.http.http3.defense.front.single_per_run', front_single_per_run)
     #profile.set_preference('network.http.http3.defence_seed', defence_seed)
 
 
@@ -126,47 +157,12 @@ def create_driver_with_default_options():
     #driver_env["MOZ_LOG_FILE"] = base_path+msm_id+"/firefox"
     #driver_env["TMPDIR"] = base_path+msm_id+"/"
     #options.binary_location="/home/fries/firefox/gecko-dev/obj-x86_64-pc-linux-gnu/dist/bin/firefox"
-    options.binary_location="/home/fries/firefox-149.0/obj-ff-nightly/dist/bin/firefox"
+    options.binary_location = ff_binary
     #driver_location = "/home/fries/firefox/geckodriver"
     driver_location = "/home/fries/firefox-149.0/obj-ff-nightly/dist/host/bin/geckodriver"
     #, env=driver_env, log_output=log_dir+"geckodriver.log"
     return webdriver.Firefox(service=Service(driver_location), options=options)
 
-
-async_script_perf = """
-  var return_to_selenium = arguments[0];
-  const perfEntries = performance.getEntriesByType("navigation");
-  const paintEntries = performance.getEntriesByType("paint");
-  const entry = perfEntries[0];
-  let resultJson = entry.toJSON();
-  resultJson.firstContentfulPaint = paintEntries.filter(paintItem => paintItem.name == "first-contentful-paint")?.[0]?.startTime;
-  resultJson.firstPaint = paintEntries.filter(paintItem => paintItem.name == "first-paint")?.[0]?.startTime;
-  if (!resultJson.firstContentfulPaint) {
-    resultJson.firstContentfulPaint = 0;
-  }
-  if (!resultJson.firstPaint) {
-    resultJson.firstPaint = 0;
-  }
-  const resources = performance.getEntriesByType('resource');
-  if (resultJson.firstContentfulPaint != 0) {
-    const resourcesBeforeFCP = resources.filter(resource => resource.responseEnd <= resultJson.firstContentfulPaint);
-    resultJson.numResourcesBeforeFCP = resourcesBeforeFCP.length;
-    resultJson.totalTransferSizeBeforeFCP = resourcesBeforeFCP.reduce((total, resource) => total + resource.transferSize, 0);
-  } else {
-    resultJson.numResourcesBeforeFCP = -1;
-    resultJson.totalTransferSizeBeforeFCP = -1;
-  }
-  resultJson.rawResources = JSON.stringify(resources);
-  
-  resultJson.timeOrigin = performance.timeOrigin;
-  //this returns the LCP as of the page load time :)
-  new PerformanceObserver((entryList) => {
-    let lcpEntry = entryList.getEntries().at(-1)
-    //resultJson.largestContentfulPaint = {elementOuterHTML: lcpEntry.element.outerHTML, startTime: lcpEntry.startTime, size: lcpEntry.size, url: lcpEntry.url};
-    resultJson.largestContentfulPaint = lcpEntry.startTime;
-    return_to_selenium(resultJson);
-  }).observe({type: 'largest-contentful-paint', buffered: true});
-"""
 
 def get_page_performance_metrics_and_write_logs(driver):
     try:
@@ -196,7 +192,7 @@ def get_page_performance_metrics_and_write_logs(driver):
         dns_override_script = '''const gOverride = Cc["@mozilla.org/network/native-dns-override;1"].getService(Ci.nsINativeDNSResolverOverride);
         '''
         for i, server in enumerate(servers):
-            ip_address = single_server_ip if single_server_ip else "10.237.0." + str(i + 3)
+            ip_address = "10.237.0.3" if server_instances == "single" else "10.237.0." + str(i + 3)
             hostnames = server.split(",")
             for hostname in hostnames:
                 dns_override_script += f'gOverride.addIPOverride("{hostname}", "{ip_address}");\n'
@@ -226,28 +222,21 @@ def perform_page_load():
     # for now we set this really high because the defense implementation inflates PLTs by quite a bit...
     driver.set_page_load_timeout(60)
     error = get_page_performance_metrics_and_write_logs(driver)
-    #log_file=log_dir+"firefox.moz_log"
-    # [TODO]: read these from the os env
-    defense_client_state_dir = log_dir+"defense-client-state/"
-    defense_server_state_dir = log_dir+"defense-server-state/"
-    #if defence in ["front-client-controlled-bidir", "front-client-controlled-unidir", "front-client-and-server-controlled-bidir"] and os.path.exists(defense_state_dir):
-    #    # wait until the directory "/data/website-fingerprinting/packet-captures/$DEFENSE/${msmID}-${shortname}/defense-state/" is empty or 15 seconds have passed
-    for i in range(3):
-        if len(os.listdir(defense_client_state_dir)) > 0 and len(os.listdir(defense_server_state_dir)) > 0:
-            print("waiting for defense to finish for 5 seconds")
-            time.sleep(5)
-        else:
-            break
-        # while True:
-        #     try:
-        #         with open(log_file, 'r') as f:
-        #             lines = f.readlines()
-        #             # Check if any line exactly matches "DEFENSE DONE"
-        #             if any("DEFENSE DONE" in line  for line in lines):
-        #                 break
-        #     except FileNotFoundError:
-        #         # File doesn't exist yet, continue waiting
-        #         pass
+    # unless we're told to exit right on load, wait for the defense to finish: the
+    # server and client each drop a lock file in their state dir while defending and
+    # remove it when done, so we wait until both dirs are empty (capped at ~15s). The
+    # state dirs come from the env the orchestration exports.
+    if not exit_on_load:
+        defense_client_state_dir = os.environ.get("DEFENSE_CLIENT_STATE_DIR", "")
+        defense_server_state_dir = os.environ.get("DEFENSE_SERVER_STATE_DIR", "")
+        for _ in range(3):
+            client_busy = bool(defense_client_state_dir) and os.path.isdir(defense_client_state_dir) and len(os.listdir(defense_client_state_dir)) > 0
+            server_busy = bool(defense_server_state_dir) and os.path.isdir(defense_server_state_dir) and len(os.listdir(defense_server_state_dir)) > 0
+            if client_busy or server_busy:
+                print("waiting for defense to finish for 5 seconds")
+                time.sleep(5)
+            else:
+                break
     #driver.service.process.kill()
     driver.quit()
     if error == "":
