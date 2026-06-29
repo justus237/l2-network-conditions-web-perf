@@ -191,7 +191,8 @@ function run_experiment_for_defense {
 	export TMPDIR="${RESULT_DIR}"
 	export SSLKEYLOGFILE="${RESULT_DIR}/sslkey.log"
 	#export MOZ_LOG=timestamp,sync,nsHttp:5,nsSocketTransport:5,UDPSocket:5,neqo_transport::*:5,neqo_defense::*:5,neqo_glue::*:5,neqo_http3::*:5
-	#export MOZ_LOG_FILE=${RESULT_DIR}/firefox
+	export MOZ_LOG=neqo_transport::*:5
+	export MOZ_LOG_FILE=${RESULT_DIR}/firefox
 	mkdir "${RESULT_DIR}/defense-client-state/"
 	export DEFENSE_CLIENT_STATE_DIR="${RESULT_DIR}/defense-client-state/"
 	# in single mode every hostname must resolve to the one server; pass its IP so the
