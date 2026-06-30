@@ -193,7 +193,7 @@ function setup_mirrored_ifaces {
     ip -netns "${BOTTLENECK_NS}" link set ifb1 up
     ip -netns "${BOTTLENECK_NS}" link set dev ifb1 gso_max_segs 1
     ip netns exec "${BOTTLENECK_NS}" ethtool -K ifb1 tso off gso off gro off
-    ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb1 rx off tx off
+    ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb1 tx off
     #veth1 ingress is redirected to ifb1
     ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth1 handle ffff: ingress
     ip netns exec "${BOTTLENECK_NS}" tc filter add dev veth1 parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb1
@@ -207,7 +207,7 @@ function setup_mirrored_ifaces {
       ip -netns "${BOTTLENECK_NS}" link set ifb$((i + 1)) up
       ip -netns "${BOTTLENECK_NS}" link set dev ifb$((i + 1)) gso_max_segs 1
       ip netns exec "${BOTTLENECK_NS}" ethtool -K ifb$((i + 1)) tso off gso off gro off
-      ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb$((i + 1)) rx off tx off
+      ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb$((i + 1)) tx off
       #vethi+1 ingress is redirected to ifbi+1
       ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev "veth$((i + 1))" handle ffff: ingress
       ip netns exec "${BOTTLENECK_NS}" tc filter add dev "veth$((i + 1))" parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev "ifb$((i + 1))"
@@ -219,7 +219,7 @@ function setup_mirrored_ifaces {
   ip -netns "${BOTTLENECK_NS}" link set ifb0 up
   ip -netns "${BOTTLENECK_NS}" link set dev ifb0 gso_max_segs 1
   ip netns exec "${BOTTLENECK_NS}" ethtool -K ifb0 tso off gso off gro off
-  ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb0 rx off tx off
+  ip netns exec "${BOTTLENECK_NS}" ethtool --offload ifb0 tx off
   # create ingress for veth0 and redirect it to ifb0
   ip netns exec "${BOTTLENECK_NS}" tc qdisc add dev veth0 handle ffff: ingress
   ip netns exec "${BOTTLENECK_NS}" tc filter add dev veth0 parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0
@@ -575,7 +575,7 @@ EOF
 fi
 }
 
-function destroy {
+function delete {
   source "/tmp/VARS"
   echo "deleting namespaces"
   # remove all namespaces
@@ -619,8 +619,8 @@ if [[ "${COMMAND}" = "CREATE" ]]; then
   echo "Configuring setup"
   create;
 elif [[ "${COMMAND}" = "DELETE" ]]; then
-  echo "Destroying setup"
-  destroy;
+  echo "Deleting setup"
+  delete;
 fi
 
 exit 0
