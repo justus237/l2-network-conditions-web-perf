@@ -145,8 +145,8 @@ function setup_bottleneck_ns {
     # if we have server namespaces, we create a veth pair for each of them
     # it can be called veth1 in the server namespace, but not in the bottleneck namespace, where it needs to be numbered, starting from veth1
     for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
-      echo "Setting up veth pair for server namespace ${i} (${SERVER_NS[$i]})."
-      echo "veth$((i + 1)) in bottleneck namespace, veth1 in server namespace."
+      #echo "Setting up veth pair for server namespace ${i} (${SERVER_NS[$i]})."
+      #echo "veth$((i + 1)) in bottleneck namespace, veth1 in server namespace."
       server_ns="${SERVER_NS[$i]}"
       ip link add "veth$((i + 1))" netns "${BOTTLENECK_NS}" type veth peer name veth1 netns "${server_ns}"
 
