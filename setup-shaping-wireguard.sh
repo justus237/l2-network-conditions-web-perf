@@ -130,7 +130,6 @@ if [[ ! -e setup-shaping-wireguard.sh ]]; then
 fi
 bundledir=$PWD
 
-# Keys reused verbatim from 2025-sandro-pischinger-bt-material/setup-shaping.sh.
 # There is exactly one tunnel, so one pair per side suffices; fixed keys keep the
 # throwaway testbed tunnel reproducible.
 WG_HOST_PRIVKEY="mM3tBoDPQmdyBqwrKCdsD30/X+B4sK12UOFRn61Fd0Q="
