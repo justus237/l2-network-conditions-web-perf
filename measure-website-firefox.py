@@ -126,7 +126,7 @@ def create_driver_with_default_options():
         # use servers_and_hostnames to override the alt-svc mapping for testing, so that we can force QUIC on all connections
         alt_svc_mapping = []
         with open("/data/website-fingerprinting/webpage-replay/replay/"+service_names[full_uri]+"/servers-and-hostnames.txt", "r") as f:
-            servers_and_hostnames = f.readline()
+            servers_and_hostnames = f.readline().strip()
         servers = servers_and_hostnames.split(";")
         for server in servers:
             hostnames = server.split(",")
@@ -199,7 +199,7 @@ def get_page_performance_metrics_and_write_logs(driver):
         # this enables us to add IP overrides for the domains
         # the file is a single line, servers are separated by semicolons, while origins within a server are separated by commas
         with open("/data/website-fingerprinting/webpage-replay/replay/"+service_names[full_uri]+"/servers-and-hostnames.txt", "r") as f:
-            servers_and_hostnames = f.readline()
+            servers_and_hostnames = f.readline().strip()
         servers = servers_and_hostnames.split(";")
         dns_override_script = '''const gOverride = Cc["@mozilla.org/network/native-dns-override;1"].getService(Ci.nsINativeDNSResolverOverride);
         '''
