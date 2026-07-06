@@ -30,7 +30,8 @@ measurement_schema = {
             "service_uri": "string",
             "defense": "string",
             "error": "string",
-            "unfinished_defenses": "integer",
+            "unfinished_client_defenses": "integer",
+            "unfinished_server_defenses": "integer",
             "rough_timestamp": "double"
             }
 navigation_schema = {
@@ -184,12 +185,18 @@ for defense_subdir in Path(base_path).iterdir():
                     current_measurement['service_uri'] = full_uri
                     current_measurement['defense'] = defense_subdir.name
                     current_measurement['error'] = ""
-                    current_measurement['unfinished_defenses'] = -1
+                    current_measurement['unfinished_client_defenses'] = -1
+                    current_measurement['unfinished_server_defenses'] = -1
                     # if the defense-state directory contains files, then those files correspond to unfinished defenses of QUIC connections
-                    defense_state_dir = measurement_dir / "defense-state"
+                    defense_state_dir = measurement_dir / "defense-client-state"
                     if defense_state_dir.is_dir():
                         unfinished_files = list(defense_state_dir.iterdir())
-                        current_measurement['unfinished_defenses'] = len(unfinished_files)
+                        current_measurement['unfinished_client_defenses'] = len(unfinished_files)
+                    # check for unfinished server defenses
+                    server_defense_state_dir = measurement_dir / "defense-server-state"
+                    if server_defense_state_dir.is_dir():
+                        unfinished_files = list(server_defense_state_dir.iterdir())
+                        current_measurement['unfinished_server_defenses'] = len(unfinished_files)
                     current_measurement['rough_timestamp'] = measurement_dir.stat().st_mtime
                     # independently of the perf.json existing, there might be an error file, which we need for the measurements table
                     error_file = measurement_dir / "error.txt"
