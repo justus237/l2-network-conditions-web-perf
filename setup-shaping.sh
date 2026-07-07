@@ -461,9 +461,9 @@ function setup_arp {
     #get MAC address of veth1 in host namespace
     MAC_ADDR_SERVER=$(ip link show veth1 | awk '/link\/ether/ {print $2}')
     #set up ARP for veth0 in client namespace to reach IP of veth1 in host namespace
-    ip -netns "$CLIENT_NS" neigh add 10.237.0.3 lladdr "${MAC_ADDR_SERVER}" dev veth0
+    ip -netns "$CLIENT_NS" neigh replace 10.237.0.3 lladdr "${MAC_ADDR_SERVER}" dev veth0
     #set up ARP for veth1 in host namespace to reach IP of veth0 in client namespace
-    ip neigh add 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
+    ip neigh replace 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
     #ip -netns "${CLIENT_NS}" neigh show
     #ip neigh show
     ip netns exec "${BOTTLENECK_NS}" bridge fdb replace "${MAC_ADDR_CLIENT}" dev veth0 master static
@@ -481,9 +481,9 @@ function setup_arp {
       # get MAC address of veth1 in server namespace
       MAC_ADDR_SERVER=$(ip -netns "${server_ns}" link show veth1 | awk '/link\/ether/ {print $2}')
       # set up ARP for veth1 in server namespace to reach IP of veth0 in client namespace
-      ip -netns "${server_ns}" neigh add 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
+      ip -netns "${server_ns}" neigh replace 10.237.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
       # set up ARP for veth0 in client namespace to reach IP of veth1 in server namespace
-      ip -netns "${CLIENT_NS}" neigh add "10.237.0.$((i + 3))" lladdr "${MAC_ADDR_SERVER}" dev veth0
+      ip -netns "${CLIENT_NS}" neigh replace "10.237.0.$((i + 3))" lladdr "${MAC_ADDR_SERVER}" dev veth0
       #ip -netns "${CLIENT_NS}" neigh show
       #ip -netns "${server_ns}" neigh show
       # also need to add the MAC address to the fdb of the bridge
