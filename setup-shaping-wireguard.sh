@@ -439,9 +439,9 @@ function setup_iptables {
 
 function setup_arp {
   # [TODO]: arp may be invalidated after some time or on link down; need to figure out if this could be a problem
-  # only the 10.0.0.0/24 underlay crossing the shaped bridge needs ARP pinning; the
-  # tunnel is L3 and never ARPs, and the gateway's server-side network is unshaped
-  # and uncaptured, so normal ARP is fine there
+  # the tunnel itself is L3 and never ARPs; what needs pinning is the 10.0.0.0/24
+  # underlay crossing the shaped bridge and, in server mode, the 10.237.0.0/24
+  # network between the gateway and the servers
   # disable automatic ARP discovery first and then set up ARP manually
   ip -netns "$CLIENT_NS" link set veth0 arp off
   #get MAC address of veth0 in client namespace
@@ -451,20 +451,43 @@ function setup_arp {
     #get MAC address of veth1 in host namespace
     MAC_ADDR_ENDPOINT=$(ip link show veth1 | awk '/link\/ether/ {print $2}')
     #set up ARP for veth1 in host namespace to reach IP of veth0 in client namespace
-    ip neigh add 10.0.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
+    ip neigh replace 10.0.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
   else
     ip -netns "${GATEWAY_NS}" link set veth1 arp off
     #get MAC address of veth1 in gateway namespace
     MAC_ADDR_ENDPOINT=$(ip -netns "${GATEWAY_NS}" link show veth1 | awk '/link\/ether/ {print $2}')
     #set up ARP for veth1 in gateway namespace to reach IP of veth0 in client namespace
-    ip -netns "${GATEWAY_NS}" neigh add 10.0.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
+    ip -netns "${GATEWAY_NS}" neigh replace 10.0.0.2 lladdr "${MAC_ADDR_CLIENT}" dev veth1
   fi
   #set up ARP for veth0 in client namespace to reach IP of veth1 at the VPN endpoint
-  ip -netns "$CLIENT_NS" neigh add 10.0.0.3 lladdr "${MAC_ADDR_ENDPOINT}" dev veth0
+  ip -netns "$CLIENT_NS" neigh replace 10.0.0.3 lladdr "${MAC_ADDR_ENDPOINT}" dev veth0
   # NOTE that "permanent" means something completely different for the bridge command
   ip netns exec "${BOTTLENECK_NS}" bridge fdb replace "${MAC_ADDR_CLIENT}" dev veth0 master static
   ip netns exec "${BOTTLENECK_NS}" bridge fdb replace "${MAC_ADDR_ENDPOINT}" dev veth1 master static
-  # need to sleep or the pings fail
+
+  if [[ "${#SERVER_NS[@]}" -ne 0 ]]; then
+    # server-side network behind the gateway, pinned exactly like the original
+    # setup-shaping.sh pins client<->servers; the gateway's L3 interface on this
+    # network is br-servers (which carries the NATed client address 10.237.0.2)
+    ip -netns "${GATEWAY_NS}" link set br-servers arp off
+    # read the bridge MAC only after all veth-s ports were added in setup_gateway_ns,
+    # because a bridge inherits its MAC from its ports
+    MAC_ADDR_GATEWAY=$(ip -netns "${GATEWAY_NS}" link show br-servers | awk '/link\/ether/ {print $2}')
+    for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
+      server_ns="${SERVER_NS[$i]}"
+      ip -netns "${server_ns}" link set veth1 arp off
+      # get MAC address of veth1 in server namespace
+      MAC_ADDR_SERVER=$(ip -netns "${server_ns}" link show veth1 | awk '/link\/ether/ {print $2}')
+      # set up ARP for veth1 in server namespace to reach the gateway (all client
+      # traffic arrives NATed as 10.237.0.2, which lives on br-servers)
+      ip -netns "${server_ns}" neigh replace 10.237.0.2 lladdr "${MAC_ADDR_GATEWAY}" dev veth1
+      # set up ARP for br-servers in gateway namespace to reach the server
+      ip -netns "${GATEWAY_NS}" neigh replace "10.237.0.$((i + 3))" lladdr "${MAC_ADDR_SERVER}" dev br-servers
+      # also pin the server MAC to its bridge port so nothing depends on learning
+      ip netns exec "${GATEWAY_NS}" bridge fdb replace "${MAC_ADDR_SERVER}" dev "veth-s$((i + 1))" master static
+    done
+  fi
+  # need to sleep or the first packets after setup fail
   sleep 2
 }
 
@@ -486,7 +509,7 @@ function setup_wireguard {
 
   # termination side
   if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
-    # NAT mode: terminate on the host, this is the bt-material's setup_tunnel with
+    # NAT mode: terminate on the host, 
     # the underlay stretched across the bottleneck; setup_iptables routes onwards
     ip link add wg-host type wireguard
     ip address add 10.100.0.1/24 dev wg-host
@@ -512,25 +535,6 @@ function setup_wireguard {
     ip netns exec "${GATEWAY_NS}" sysctl -w net.ipv4.ip_forward=1 &>/dev/null
     ip netns exec "${GATEWAY_NS}" iptables -t nat -A POSTROUTING -s 10.100.0.2/32 -o br-servers -j MASQUERADE
   fi
-}
-
-function check_tunnel {
-  # one ping to the tunnel endpoint verifies connectivity AND pre-establishes the
-  # wireguard handshake, so the first packet of a measurement does not pay for it
-  echo "sanity pings through the tunnel"
-  if ip netns exec "${CLIENT_NS}" ping -c 1 -W 3 10.100.0.1 &>/dev/null; then
-    echo "tunnel to the VPN endpoint up"
-  else
-    echo "WARNING: no tunnel connectivity to the VPN endpoint (10.100.0.1)!"
-  fi
-  # in server mode also check end-to-end through the gateway NAT to every server
-  for (( i=0; i<${#SERVER_NS[@]}; i++ )); do
-    if ip netns exec "${CLIENT_NS}" ping -c 1 -W 3 "10.237.0.$((i + 3))" &>/dev/null; then
-      echo "server 10.237.0.$((i + 3)) reachable through the tunnel"
-    else
-      echo "WARNING: server 10.237.0.$((i + 3)) not reachable through the tunnel!"
-    fi
-  done
 }
 
 #for all veth pairs and bridges: create -> set ip addresses/assign veth ends to bridge -> set up
@@ -582,8 +586,6 @@ function create {
   fi
 
   setup_wireguard
-
-  check_tunnel
 
   # write to vars
   if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
