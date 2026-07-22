@@ -31,6 +31,15 @@ bundledir=$PWD
 #   -exit-on-load  -> quit right after page load (measure script does not wait for the
 #                     defense to finish). Without it, wait for the defense to finish.
 #   -moz           -> drive the distro/.deb Firefox instead of my build.
+#   -wg            -> consumer-VPN model: setup-shaping-wireguard.sh replaces
+#                     setup-shaping.sh. The client reaches all servers through ONE
+#                     WireGuard tunnel that crosses the shaped bottleneck and
+#                     terminates in a gateway namespace, which NATs the decrypted
+#                     traffic onto the server bridge as 10.237.0.2 -- servers, DNS
+#                     overrides and the measure script are unchanged, and it
+#                     composes with -single-conn as well as the default
+#                     one-namespace-per-server mode. middle.pcap then contains the
+#                     encrypted tunnel UDP (the adversary's view).
 DEFAULT_SHAPING="10Mbit 5Mbit 10ms 10ms"
 if [[ -f "shapings.txt" ]]; then
 	mapfile -t SHAPINGS < "shapings.txt"
@@ -55,6 +64,11 @@ EXPERIMENTS=(
 	"front-client-and-server-controlled-bidir-qcsd-exit-on-load"
 	"undefended"
 	"undefended-moz"
+	# wireguard variants: multi server and single server
+	#"undefended-wg"
+	#"undefended-single-conn-wg"
+	#"front-client-and-server-controlled-bidir-wg"
+	#"front-client-and-server-controlled-bidir-single-conn-wg"
 )
 
 function run_experiment_for_defense {
@@ -69,6 +83,7 @@ function run_experiment_for_defense {
 	local CONN_MODE=multi;    [[ $EXPERIMENT == *-single-conn*  ]] && CONN_MODE=single
 	local EXIT_ON_LOAD=false; [[ $EXPERIMENT == *-exit-on-load* ]] && EXIT_ON_LOAD=true
 	local FF_BUILD=mine;      [[ $EXPERIMENT == *-moz*          ]] && FF_BUILD=moz
+	local WG=false;           [[ $EXPERIMENT == *-wg*           ]] && WG=true
 	# qcsd (cumulative counter) is inherently a first-connection-only defense, so it
 	# implies first-conn; the sliding window can also be restricted via -first-conn.
 	local FIRST_CONN=false
@@ -78,7 +93,7 @@ function run_experiment_for_defense {
 	local DEFENSE=$EXPERIMENT changed=1
 	while [[ $changed == 1 ]]; do
 		changed=0
-		for s in -qcsd -first-conn -single-conn -exit-on-load -moz; do
+		for s in -qcsd -first-conn -single-conn -exit-on-load -moz -wg; do
 			if [[ $DEFENSE == *"$s" ]]; then DEFENSE=${DEFENSE%"$s"}; changed=1; fi
 		done
 	done
@@ -107,14 +122,20 @@ function run_experiment_for_defense {
 	# one server namespace per captured server, or a single shared one in single mode
 	local NUM_NS=${#SERVERS[@]}
 	[[ $CONN_MODE == single ]] && NUM_NS=1
+	# -wg swaps in the WireGuard variant of the setup (same server namespaces and
+	# service IPs, but the shaped bottleneck carries the one encrypted tunnel)
+	local SETUP_SCRIPT="./setup-shaping.sh"
+	[[ $WG == true ]] && SETUP_SCRIPT="./setup-shaping-wireguard.sh"
 	# TODO: capture the return code of setup-shaping and if it is not 0, call delete and exit with error
-	./setup-shaping.sh CREATE ${SHAPING} "${NUM_NS}"
+	"${SETUP_SCRIPT}" CREATE ${SHAPING} "${NUM_NS}"
 
 	#used by both client and quic-go server
 	export TRACE_CSV_DIR="${RESULT_DIR}/"
 
 	#ip netns exec client-net tcpdump -i veth0 -w "${RESULT_DIR}/client.pcap" 2> /tmp/tcpdump-client.log  &
 	#tcpdumpclientPID=$!
+	# in wg mode the bridge only carries the encrypted tunnel UDP, so middle.pcap
+	# already is the adversary's view of the tunnel
 	ip netns exec bottleneck-net tcpdump -i br-client-inet -w "${RESULT_DIR}/middle.pcap" 2> /tmp/tcpdump-middle.log &
 	tcpdumpmiddlePID=$!
 
@@ -207,7 +228,7 @@ function run_experiment_for_defense {
 	kill -SIGINT $tcpdumpmiddlePID
 	wait $tcpdumpmiddlePID
 	# DELETE tears down the server namespaces, which also kills the server processes
-	./setup-shaping.sh DELETE
+	"${SETUP_SCRIPT}" DELETE
 }
 
 iterations=$1
@@ -218,11 +239,11 @@ if [[ $iterations == "testing" ]]; then
 		echo ${uri}
 		run_experiment_for_defense "testing" "${DEFAULT_SHAPING}"
 	done < websites.txt
-elif [[ $iterations == "front-client-controlled-bidir" ]]; then
+elif [[ $iterations == "front-client-controlled-unidir" ]]; then
 	echo "Running ${iterations}"
 	while read uri; do
 		echo ${uri}
-		run_experiment_for_defense "front-client-controlled-bidir" "${DEFAULT_SHAPING}"
+		run_experiment_for_defense "front-client-controlled-unidir" "${DEFAULT_SHAPING}"
 	done < websites.txt
 elif [[ $iterations == "front-client-and-server-controlled-bidir" ]]; then
 	echo "Running ${iterations}"
