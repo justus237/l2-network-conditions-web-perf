@@ -55,20 +55,21 @@ fi
 # the measurement plan: experiment labels run each iteration. Comment out any you
 # don't want to run.
 EXPERIMENTS=(
-	"front-client-and-server-controlled-bidir-qcsd"
-	"front-client-and-server-controlled-bidir"
-	"front-client-and-server-controlled-bidir-first-conn"
-	"front-client-and-server-controlled-bidir-single-conn"
-	"front-client-and-server-controlled-bidir-first-conn-single-conn"
-	"front-client-and-server-controlled-bidir-exit-on-load"
-	"front-client-and-server-controlled-bidir-qcsd-exit-on-load"
-	"undefended"
-	"undefended-moz"
+	#"front-client-and-server-controlled-bidir-qcsd"
+	#"front-client-and-server-controlled-bidir"
+	#"front-client-and-server-controlled-bidir-first-conn"
+	#"front-client-and-server-controlled-bidir-single-conn"
+	#"front-client-and-server-controlled-bidir-first-conn-single-conn"
+	#"front-client-and-server-controlled-bidir-exit-on-load"
+	#"front-client-and-server-controlled-bidir-qcsd-exit-on-load"
+	#"undefended"
+	#"undefended-moz"
 	# wireguard variants: multi server and single server
 	#"undefended-wg"
 	#"undefended-single-conn-wg"
 	#"front-client-and-server-controlled-bidir-wg"
 	#"front-client-and-server-controlled-bidir-single-conn-wg"
+	"front-client-and-server-controlled-bidir-qcsd-wg"
 )
 
 function run_experiment_for_defense {
