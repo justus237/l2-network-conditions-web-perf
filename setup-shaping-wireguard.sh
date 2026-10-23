@@ -143,8 +143,10 @@ function load_kernel_modules {
   #i.e., if we only shape capacity XOR latency in each of the directions
   #loading and unloading modprobes is definitely not free -> TODO
   echo "Activating modprobes for ifb and mirroring."
-  modprobe -q ifb numifbs=0
-  modprobe act_mirred
+  #ifb and act_mirred may be built into the kernel instead (e.g. a custom kernel
+  #without /lib/modules under Apple container): modprobe then fails, but both work
+  modprobe -q ifb numifbs=0 2>/dev/null || true
+  modprobe -q act_mirred 2>/dev/null || true
 }
 
 function create_namespaces {
@@ -493,21 +495,9 @@ function setup_arp {
 
 function setup_wireguard {
   echo "setting up the wireguard tunnel across the shaped bottleneck"
-  # client side: wg0 is the client's default interface, like a consumer VPN
-  ip -netns "${CLIENT_NS}" link add wg0 type wireguard
-  ip -netns "${CLIENT_NS}" address add 10.100.0.2/24 dev wg0
-  ip netns exec "${CLIENT_NS}" wg set wg0 \
-    private-key <(echo "${WG_CLIENT_PRIVKEY}") \
-    peer "${WG_HOST_PUBKEY}" \
-    allowed-ips 0.0.0.0/0 \
-    endpoint 10.0.0.3:51820
-  ip -netns "${CLIENT_NS}" link set dev wg0 up
-  ip netns exec "${CLIENT_NS}" sysctl -w net.ipv6.conf.wg0.disable_ipv6=1 &>/dev/null
-  # everything except the underlay (which is on-link and more specific) goes
-  # through the tunnel
-  ip -netns "${CLIENT_NS}" route add default dev wg0
-
-  # termination side
+  # termination side first: the client's keepalive fires the handshake as soon as
+  # wg0 comes up, and if wg-host is not listening yet that initiation is lost and
+  # wireguard only retries after REKEY_TIMEOUT (5s), stalling the first measurement
   if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
     # NAT mode: terminate on the host, 
     # the underlay stretched across the bottleneck; setup_iptables routes onwards
@@ -518,6 +508,8 @@ function setup_wireguard {
       listen-port 51820 \
       peer "${WG_CLIENT_PUBKEY}" \
       allowed-ips 10.100.0.2/32
+    ip link set dev wg-host gso_max_segs 1
+    ethtool -K wg-host tso off gso off gro off tx-udp-segmentation off
     ip link set dev wg-host up
     sysctl -w net.ipv6.conf.wg-host.disable_ipv6=1 &>/dev/null
   else
@@ -530,11 +522,57 @@ function setup_wireguard {
       listen-port 51820 \
       peer "${WG_CLIENT_PUBKEY}" \
       allowed-ips 10.100.0.2/32
+    ip -netns "${GATEWAY_NS}" link set dev wg-host gso_max_segs 1
+    ip netns exec "${GATEWAY_NS}" ethtool -K wg-host tso off gso off gro off tx-udp-segmentation off
     ip -netns "${GATEWAY_NS}" link set dev wg-host up
     ip netns exec "${GATEWAY_NS}" sysctl -w net.ipv6.conf.wg-host.disable_ipv6=1 &>/dev/null
     ip netns exec "${GATEWAY_NS}" sysctl -w net.ipv4.ip_forward=1 &>/dev/null
     ip netns exec "${GATEWAY_NS}" iptables -t nat -A POSTROUTING -s 10.100.0.2/32 -o br-servers -j MASQUERADE
   fi
+
+  # client side: wg0 is the client's default interface, like a consumer VPN
+  ip -netns "${CLIENT_NS}" link add wg0 type wireguard
+  ip -netns "${CLIENT_NS}" address add 10.100.0.2/24 dev wg0
+  # persistent-keepalive primes the handshake the moment wg0 comes up (so the first
+  # QUIC Initial of a measurement does not race a cold tunnel) and keeps the session
+  # + gateway conntrack warm through idle gaps in a page load, like a real VPN client
+  ip netns exec "${CLIENT_NS}" wg set wg0 \
+    private-key <(echo "${WG_CLIENT_PRIVKEY}") \
+    peer "${WG_HOST_PUBKEY}" \
+    allowed-ips 0.0.0.0/0 \
+    endpoint 10.0.0.3:51820 \
+    persistent-keepalive 25
+  # per-packet fidelity like the veths: without this wg0 hands Firefox GRO-coalesced
+  # batches (its socket enables UDP_GRO) and accepts its UDP GSO sends unsegmented, so
+  # delivery timing differs from setup-shaping.sh and inner.pcap holds datagrams > MTU
+  ip -netns "${CLIENT_NS}" link set dev wg0 gso_max_segs 1
+  ip netns exec "${CLIENT_NS}" ethtool -K wg0 tso off gso off gro off tx-udp-segmentation off
+  ip -netns "${CLIENT_NS}" link set dev wg0 up
+  ip netns exec "${CLIENT_NS}" sysctl -w net.ipv6.conf.wg0.disable_ipv6=1 &>/dev/null
+  if [[ "${#SERVER_NS[@]}" -eq 0 ]]; then
+    # NAT mode: everything except the underlay (which is on-link and more specific)
+    # goes through the tunnel
+    ip -netns "${CLIENT_NS}" route add default dev wg0
+  else
+    # server mode: only the server subnet goes through the tunnel, exactly the reach
+    # client-net has in setup-shaping.sh. Hostnames without a replay server still
+    # resolve to real IPs on the measurement host (nss-resolve reaches the host's
+    # systemd-resolved over a unix socket, which ignores the netns); with a default
+    # route those QUIC connections vanish at the gateway and stall the page load for
+    # the 30s idle timeout, while without one they fail immediately (ENETUNREACH)
+    ip -netns "${CLIENT_NS}" route add 10.237.0.0/24 dev wg0
+  fi
+
+  # block until the handshake completed, so the measurement starts on a warm tunnel
+  # and the handshake stays out of middle.pcap; 10s covers one lost initiation
+  for (( t=0; t<100; t++ )); do
+    if ip netns exec "${CLIENT_NS}" wg show wg0 latest-handshakes | awk '$2 != 0 {ok=1} END {exit !ok}'; then
+      echo "wireguard handshake done after ~$((t * 100))ms"
+      return
+    fi
+    sleep 0.1
+  done
+  echo "WARNING: no wireguard handshake between ${CLIENT_NS} and the VPN endpoint after 10s!"
 }
 
 #for all veth pairs and bridges: create -> set ip addresses/assign veth ends to bridge -> set up

@@ -111,8 +111,10 @@ function load_kernel_modules {
   #i.e., if we only shape capacity XOR latency in each of the directions
   #loading and unloading modprobes is definitely not free -> TODO
   echo "Activating modprobes for ifb and mirroring."
-  modprobe -q ifb numifbs=0
-  modprobe act_mirred
+  #ifb and act_mirred may be built into the kernel instead (e.g. a custom kernel
+  #without /lib/modules under Apple container): modprobe then fails, but both work
+  modprobe -q ifb numifbs=0 2>/dev/null || true
+  modprobe -q act_mirred 2>/dev/null || true
 }
 
 function create_namespaces {

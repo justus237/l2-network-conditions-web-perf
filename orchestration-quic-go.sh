@@ -139,6 +139,13 @@ function run_experiment_for_defense {
 	# already is the adversary's view of the tunnel
 	ip netns exec bottleneck-net tcpdump -i br-client-inet -w "${RESULT_DIR}/middle.pcap" 2> /tmp/tcpdump-middle.log &
 	tcpdumpmiddlePID=$!
+	if [[ $WG == true ]]; then
+		# capture the decrypted inner QUIC on the client's tunnel interface (wg0
+		# presents plaintext; the crypto+UDP is on the socket below it), so
+		# inner.pcap + SSLKEYLOGFILE decrypts the QUIC/TLS without touching wireguard
+		ip netns exec client-net tcpdump -i wg0 -w "${RESULT_DIR}/inner.pcap" 2> /tmp/tcpdump-inner.log &
+		tcpdumpinnerPID=$!
+	fi
 
 	mkdir "${RESULT_DIR}/defense-server-state/"
 	export DEFENSE_SERVER_STATE_DIR="${RESULT_DIR}/defense-server-state/"
@@ -228,6 +235,11 @@ function run_experiment_for_defense {
 	#wait $tcpdumpclientPID
 	kill -SIGINT $tcpdumpmiddlePID
 	wait $tcpdumpmiddlePID
+	if [[ $WG == true ]]; then
+		# stop the inner capture before DELETE removes wg0 with the client namespace
+		kill -SIGINT $tcpdumpinnerPID
+		wait $tcpdumpinnerPID
+	fi
 	# DELETE tears down the server namespaces, which also kills the server processes
 	"${SETUP_SCRIPT}" DELETE
 }
